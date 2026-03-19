@@ -1,0 +1,61 @@
+export interface ClientRow {
+  cliente: string;
+  ciudad: string;
+  segmento: string;
+  F1: number;
+  F2: number;
+  F3: number;
+  F4: number;
+  F5: number;
+  F6: number;
+  F7: number;
+  F8: number;
+  F9: number;
+  F10: number;
+  volumen: number;
+}
+
+export interface ProductFamily {
+  id: string;
+  name: string;
+  type: 'Volumen' | 'Técnico' | 'Sistema';
+  margin: number; // percentage, e.g. 10 = 10%
+}
+
+export interface SegmentBenchmark {
+  id: string;
+  name: string;
+  F1: number;
+  F2: number;
+  F3: number;
+  F4: number;
+  F5: number;
+  F6: number;
+  F7: number;
+  F8: number;
+  F9: number;
+  F10: number;
+  benchmarkMargin: number;
+}
+
+export interface ProcessedClient {
+  cliente: string;
+  ciudad: string;
+  segmento: string;
+  volumen: number;
+  mix: Record<string, number>;
+  actualMargin: number;
+  benchmarkMargin: number;
+  mixPower: number;
+  gap: number;
+  potentialMargin6M: number;
+  opportunityEuros: number;
+  opportunityPtTon: number;
+  priority: 'Muy Alta' | 'Alta' | 'Media' | 'Mantener';
+  priorityColor: 'red' | 'orange' | 'blue' | 'green';
+}
+
+export interface AppConfig {
+  families: ProductFamily[];
+  segments: SegmentBenchmark[];
+}
