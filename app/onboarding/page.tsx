@@ -4,104 +4,83 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Papa from 'papaparse';
 import Link from 'next/link';
-import { TrendingUp, Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
+import { Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { ClientRow } from '@/lib/types';
 import { validateRow } from '@/lib/calculations';
 import { saveRawClients } from '@/lib/store';
 import { SAMPLE_CSV } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
 
-interface ParsedResult {
-  rows: ClientRow[];
-  errors: string[];
+const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC', green: '#2D7A4F', red: '#C94040' };
+
+function Logo() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden>
+      <rect x="4"  y="2"  width="11" height="20" rx="2.5" fill={D.dark} />
+      <rect x="17" y="10" width="11" height="20" rx="2.5" fill={D.dark} />
+      <rect x="10" y="10" width="11" height="12" rx="0"   fill={D.bg} />
+    </svg>
+  );
 }
+
+interface ParsedResult { rows: ClientRow[]; errors: string[]; }
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [company, setCompany] = useState('');
+  const [company, setCompany]   = useState('');
   const [greeting, setGreeting] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const [result, setResult]     = useState<ParsedResult | null>(null);
+  const [fileName, setFileName] = useState('');
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
       const name = data.user?.user_metadata?.company_name as string | undefined;
-      if (name) {
-        setGreeting(name);
-        setCompany(name);
-      }
+      if (name) { setGreeting(name); setCompany(name); }
     });
   }, []);
-  const [dragActive, setDragActive] = useState(false);
-  const [result, setResult] = useState<ParsedResult | null>(null);
-  const [fileName, setFileName] = useState('');
 
   const processFile = (file: File) => {
     setFileName(file.name);
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: true,
+      header: true, skipEmptyLines: true, dynamicTyping: true,
       complete: (parsed) => {
-        const rows: ClientRow[] = [];
-        const errors: string[] = [];
-
+        const rows: ClientRow[] = []; const errors: string[] = [];
         parsed.data.forEach((raw: unknown, i: number) => {
           const row = raw as Record<string, unknown>;
           const clientRow: ClientRow = {
-            cliente: String(row['cliente'] ?? '').trim(),
-            ciudad: String(row['ciudad'] ?? '').trim(),
+            cliente: String(row['cliente'] ?? '').trim(), ciudad: String(row['ciudad'] ?? '').trim(),
             segmento: String(row['segmento'] ?? '').trim(),
-            F1: Number(row['F1'] ?? 0),
-            F2: Number(row['F2'] ?? 0),
-            F3: Number(row['F3'] ?? 0),
-            F4: Number(row['F4'] ?? 0),
-            F5: Number(row['F5'] ?? 0),
-            F6: Number(row['F6'] ?? 0),
-            F7: Number(row['F7'] ?? 0),
-            F8: Number(row['F8'] ?? 0),
-            F9: Number(row['F9'] ?? 0),
-            F10: Number(row['F10'] ?? 0),
-            volumen: Number(row['volumen'] ?? 0),
+            F1: Number(row['F1'] ?? 0), F2: Number(row['F2'] ?? 0), F3: Number(row['F3'] ?? 0),
+            F4: Number(row['F4'] ?? 0), F5: Number(row['F5'] ?? 0), F6: Number(row['F6'] ?? 0),
+            F7: Number(row['F7'] ?? 0), F8: Number(row['F8'] ?? 0), F9: Number(row['F9'] ?? 0),
+            F10: Number(row['F10'] ?? 0), volumen: Number(row['volumen'] ?? 0),
           };
           const error = validateRow(clientRow, i);
           if (error) errors.push(error);
           rows.push(clientRow);
         });
-
         setResult({ rows, errors });
       },
-      error: (err) => {
-        setResult({ rows: [], errors: [`Error leyendo el archivo: ${err.message}`] });
-      },
+      error: (err) => setResult({ rows: [], errors: [`Error leyendo el archivo: ${err.message}`] }),
     });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
+    const file = e.target.files?.[0]; if (file) processFile(file);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
+    e.preventDefault(); setDragActive(false);
     const file = e.dataTransfer.files[0];
     if (file && file.name.endsWith('.csv')) processFile(file);
   }, []);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(true);
-  };
-
-  const handleDragLeave = () => setDragActive(false);
-
   const handleDownloadSample = () => {
     const blob = new Blob([SAMPLE_CSV], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'mixpower_ejemplo.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = 'mixpower_ejemplo.csv';
+    a.click(); URL.revokeObjectURL(url);
   };
 
   const handleContinue = () => {
@@ -113,130 +92,129 @@ export default function OnboardingPage() {
   const canContinue = result && result.rows.length > 0 && result.errors.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Nav */}
-      <nav className="bg-white border-b border-gray-100 px-8 py-4 flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#1e3a5f] rounded-lg flex items-center justify-center">
-            <TrendingUp size={16} className="text-white" />
-          </div>
-          <span className="text-xl font-bold text-[#1e3a5f]">MixPower</span>
+    <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', flexDirection: 'column' }}>
+
+      {/* Navbar */}
+      <nav style={{ backgroundColor: D.bg, borderBottom: `1px solid ${D.border}`, height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 48px', position: 'sticky', top: 0, zIndex: 40 }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+          <Logo />
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '16px', color: D.dark }}>MixPower</span>
         </Link>
-        <span className="text-gray-300 mx-1">/</span>
-        <span className="text-gray-500 text-sm">Subida de datos</span>
+        <span style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>Importar cartera</span>
       </nav>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-2xl">
-          <div className="mb-8">
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+        <div style={{ width: '100%', maxWidth: '600px' }}>
+
+          {/* Heading */}
+          <div style={{ marginBottom: '32px' }}>
             {greeting && (
-              <p className="text-sm text-gray-400 mb-1" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Hola, <span className="font-medium text-[#1e3a5f]">{greeting}</span>
+              <p style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '0 0 8px 0' }}>
+                Hola, <span style={{ color: D.dark, fontWeight: 500 }}>{greeting}</span>
               </p>
             )}
-            <h1 className="text-2xl font-bold text-[#1e3a5f] mb-2">Importa tu cartera de clientes</h1>
-            <p className="text-gray-500 text-sm">
-              Sube un CSV con el mix de producto de cada cliente. Calcularemos el Mix Power y la oportunidad de margen automáticamente.
+            <h1 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '40px', fontWeight: 400, color: D.dark, margin: '0 0 10px 0', lineHeight: 1.1 }}>
+              Importa tu cartera.
+            </h1>
+            <p style={{ fontSize: '16px', fontWeight: 300, color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0, lineHeight: 1.6 }}>
+              Sube un CSV con el mix de producto de cada cliente y calcularemos el Mix Power automáticamente.
             </p>
           </div>
 
-          {/* Company name */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4 shadow-sm">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre de tu empresa (opcional)
+          {/* Company */}
+          <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', padding: '24px', marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              Nombre de empresa
             </label>
             <input
-              type="text"
-              value={company}
-              onChange={e => setCompany(e.target.value)}
-              placeholder="Ej: Morteros García S.A."
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f]"
+              type="text" value={company} onChange={e => setCompany(e.target.value)}
+              placeholder="Morteros García S.A."
+              style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '10px 14px', fontSize: '14px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.bg, outline: 'none' }}
+              onFocus={e => (e.target.style.borderColor = D.dark)}
+              onBlur={e  => (e.target.style.borderColor = D.border)}
             />
           </div>
 
           {/* Upload zone */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-700">Archivo CSV</h2>
+          <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', padding: '24px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Archivo CSV
+              </span>
               <button
                 onClick={handleDownloadSample}
-                className="flex items-center gap-1.5 text-xs text-[#1e3a5f] font-medium hover:underline"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: D.sec, fontFamily: 'Inter, sans-serif', background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '5px 12px', cursor: 'pointer' }}
               >
-                <Download size={13} />
-                Descargar CSV de ejemplo
+                <Download size={12} />
+                Descargar ejemplo
               </button>
             </div>
 
+            {/* Drop zone */}
             <div
               onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 transition-colors cursor-pointer ${
-                dragActive ? 'border-[#1e3a5f] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-              }`}
+              onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
               onClick={() => document.getElementById('csv-input')?.click()}
+              style={{
+                border: `1px dashed ${dragActive ? D.dark : D.border}`,
+                borderRadius: '10px', padding: '48px 24px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                cursor: 'pointer', backgroundColor: dragActive ? 'rgba(26,26,24,0.02)' : D.bg,
+                transition: 'all 0.15s',
+              }}
             >
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                <Upload size={22} className="text-gray-400" />
+              <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: D.white, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Upload size={18} color={D.muted} />
               </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">
-                  {fileName ? fileName : 'Arrastra tu CSV aquí o haz clic para seleccionar'}
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '14px', color: fileName ? D.dark : D.sec, fontFamily: 'Inter, sans-serif', margin: '0 0 4px 0', fontWeight: fileName ? 500 : 400 }}>
+                  {fileName || 'Arrastra tu CSV aquí o haz clic'}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Solo archivos .csv</p>
+                <p style={{ fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: 0 }}>Solo archivos .csv</p>
               </div>
-              <input
-                id="csv-input"
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleFileChange}
-              />
+              <input id="csv-input" type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
             </div>
 
-            {/* Column reference */}
-            <div className="mt-4 bg-gray-50 rounded-lg p-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Columnas requeridas en el CSV:</p>
-              <p className="text-xs text-gray-500 font-mono leading-relaxed">
-                cliente, ciudad, segmento, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, volumen
+            {/* Column hint */}
+            <div style={{ marginTop: '16px', backgroundColor: D.bg, borderRadius: '6px', padding: '12px 14px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 500, color: D.muted, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px 0' }}>
+                Columnas requeridas
               </p>
-              <p className="text-xs text-gray-400 mt-2">
-                F1–F10 son los % del mix de cada familia (deben sumar 100 por cliente).
-                Volumen en toneladas.
+              <p style={{ fontSize: '12px', color: D.sec, fontFamily: 'monospace', margin: 0, lineHeight: 1.6 }}>
+                cliente, ciudad, segmento, F1–F10, volumen
+              </p>
+              <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '6px 0 0 0' }}>
+                F1–F10 deben sumar 100 por cliente. Volumen en toneladas.
               </p>
             </div>
           </div>
 
-          {/* Validation results */}
+          {/* Validation */}
           {result && (
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4 shadow-sm">
+            <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', padding: '20px', marginBottom: '12px' }}>
               {result.errors.length === 0 ? (
-                <div className="flex items-start gap-3 text-green-700">
-                  <CheckCircle size={20} className="flex-shrink-0 text-green-600 mt-0.5" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckCircle size={18} color={D.green} />
                   <div>
-                    <p className="text-sm font-semibold">Archivo válido</p>
-                    <p className="text-xs text-green-600 mt-0.5">
-                      {result.rows.length} clientes cargados correctamente
-                    </p>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>Archivo válido</p>
+                    <p style={{ fontSize: '12px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: '2px 0 0 0' }}>{result.rows.length} clientes cargados correctamente</p>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <div className="flex items-start gap-3 text-red-700 mb-3">
-                    <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold">Errores de validación</p>
-                      <p className="text-xs text-red-500 mt-0.5">Corrige los errores antes de continuar</p>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <AlertCircle size={18} color={D.red} />
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>Errores de validación</p>
                   </div>
-                  <ul className="space-y-1.5">
+                  <div style={{ border: `1px solid ${D.border}`, borderRadius: '6px', overflow: 'hidden' }}>
                     {result.errors.map((err, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                        <X size={12} className="flex-shrink-0 mt-0.5" />
-                        {err}
-                      </li>
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px', borderBottom: i < result.errors.length - 1 ? `1px solid ${D.border}` : 'none', backgroundColor: i % 2 === 0 ? D.white : D.bg }}>
+                        <X size={12} color={D.red} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span style={{ fontSize: '12px', color: D.red, fontFamily: 'Inter, sans-serif' }}>{err}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -244,16 +222,18 @@ export default function OnboardingPage() {
 
           {/* CTA */}
           <button
-            onClick={handleContinue}
-            disabled={!canContinue}
-            className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-base font-semibold transition-all ${
-              canContinue
-                ? 'bg-[#1e3a5f] text-white hover:bg-[#16325a] shadow-lg shadow-blue-900/20'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
+            onClick={handleContinue} disabled={!canContinue}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              padding: '13px', borderRadius: '6px', fontSize: '14px', fontFamily: 'Inter, sans-serif', fontWeight: 500,
+              border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
+              backgroundColor: canContinue ? D.dark : D.border,
+              color: canContinue ? '#fff' : D.muted,
+              transition: 'opacity 0.15s',
+            }}
           >
             Ver dashboard
-            <ArrowRight size={18} />
+            <ArrowRight size={16} />
           </button>
         </div>
       </main>

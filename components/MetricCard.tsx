@@ -1,25 +1,25 @@
 'use client';
 
 interface Props {
-  title: string;
+  label: string;
   value: string;
   subtitle?: string;
-  accent?: 'default' | 'green' | 'red' | 'blue';
 }
 
-const accents = {
-  default: 'text-[#1e3a5f]',
-  green: 'text-green-600',
-  red: 'text-red-600',
-  blue: 'text-blue-600',
-};
-
-export default function MetricCard({ title, value, subtitle, accent = 'default' }: Props) {
+export default function MetricCard({ label, value, subtitle }: Props) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-      <p className="text-sm text-gray-500 font-medium mb-1">{title}</p>
-      <p className={`text-2xl font-bold ${accents[accent]}`}>{value}</p>
-      {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+    <div style={{ backgroundColor: '#fff', border: '1px solid #E2E2DC', borderRadius: '10px', padding: '24px' }}>
+      <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B9B97', fontFamily: 'Inter, sans-serif', fontWeight: 500, margin: '0 0 8px 0' }}>
+        {label}
+      </p>
+      <p style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '36px', color: '#1A1A18', lineHeight: 1, margin: '0 0 6px 0' }}>
+        {value}
+      </p>
+      {subtitle && (
+        <p style={{ fontSize: '12px', color: '#6B6B67', fontFamily: 'Inter, sans-serif', margin: 0 }}>
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }

@@ -11,214 +11,216 @@ interface Props {
   onClose: () => void;
 }
 
-function fmt(n: number, decimals = 1) {
-  return n.toFixed(decimals);
-}
+const D = {
+  bg:     '#F7F6F2',
+  white:  '#FFFFFF',
+  dark:   '#1A1A18',
+  sec:    '#6B6B67',
+  muted:  '#9B9B97',
+  border: '#E2E2DC',
+  red:    '#C94040',
+  green:  '#2D7A4F',
+};
 
+function fmt(n: number, d = 1) { return n.toFixed(d); }
 function fmtEur(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
 export default function ClientDetailPanel({ client, config, onClose }: Props) {
-  const families = config.families;
-
-  // Find segment benchmark
   const segment = config.segments.find(s =>
     s.name.toLowerCase().trim() === client.segmento.toLowerCase().trim()
   ) ?? config.segments[0];
 
-  const familyRows = families.map(f => {
-    const actual = client.mix[f.id] ?? 0;
+  const familyRows = config.families.map(f => {
+    const actual    = client.mix[f.id] ?? 0;
     const benchmark = segment[f.id as keyof typeof segment] as number;
-    const gap = actual - benchmark;
-    return { ...f, actual, benchmark, gap };
+    return { ...f, actual, benchmark, gap: actual - benchmark };
   });
 
-  // Top 3 opportunity families (most negative gap = most underdev)
-  const top3 = [...familyRows]
-    .filter(f => f.gap < 0)
-    .sort((a, b) => a.gap - b.gap)
-    .slice(0, 3);
+  const top3 = [...familyRows].filter(f => f.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
 
   const handleExportPDF = async () => {
     const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // Header
-    doc.setFillColor(30, 58, 95);
-    doc.rect(0, 0, 210, 28, 'F');
+    doc.setFillColor(26, 26, 24);
+    doc.rect(0, 0, 210, 26, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MixPower', 14, 12);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Informe de cliente', 14, 20);
-    doc.setFontSize(9);
-    doc.text(new Date().toLocaleDateString('es-ES'), 180, 12, { align: 'right' });
-
-    // Client title
-    doc.setTextColor(30, 58, 95);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(client.cliente, 14, 40);
-    doc.setFontSize(10);
+    doc.text('MixPower', 14, 11);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text(`${client.ciudad} · ${client.segmento} · ${client.volumen} t`, 14, 47);
+    doc.text('Informe de cliente', 14, 19);
+    doc.text(new Date().toLocaleDateString('es-ES'), 196, 11, { align: 'right' });
 
-    // Metrics row
+    doc.setTextColor(26, 26, 24);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(client.cliente, 14, 38);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 107, 103);
+    doc.text(`${client.ciudad} · ${client.segmento} · ${client.volumen} t`, 14, 45);
+
     const metrics = [
       { label: 'Margen actual', value: `${fmt(client.actualMargin)}%` },
-      { label: 'Mix Power', value: fmt(client.mixPower, 2) },
-      { label: 'Gap vs benchmark', value: `${fmt(client.gap)} pp` },
-      { label: 'Oportunidad', value: fmtEur(client.opportunityEuros) },
+      { label: 'Mix Power',     value: fmt(client.mixPower, 2) },
+      { label: 'Gap',           value: `${fmt(client.gap)} pp` },
+      { label: 'Oportunidad',   value: fmtEur(client.opportunityEuros) },
     ];
-    let x = 14;
+    let mx = 14;
     metrics.forEach(m => {
-      doc.setFillColor(245, 247, 250);
-      doc.roundedRect(x, 54, 43, 18, 2, 2, 'F');
-      doc.setFontSize(7);
-      doc.setTextColor(100, 100, 100);
-      doc.text(m.label, x + 3, 61);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 58, 95);
-      doc.text(m.value, x + 3, 68);
+      doc.setFillColor(247, 246, 242);
+      doc.roundedRect(mx, 52, 43, 17, 2, 2, 'F');
+      doc.setFontSize(7); doc.setTextColor(155, 155, 151);
+      doc.text(m.label, mx + 3, 59);
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
+      doc.text(m.value, mx + 3, 66);
       doc.setFont('helvetica', 'normal');
-      x += 47;
+      mx += 46;
     });
 
-    // Family table
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 58, 95);
-    doc.text('Mix de producto por familia', 14, 82);
-
-    const headers = ['Familia', 'Mix actual %', 'Benchmark %', 'Gap pp'];
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
+    doc.text('Mix por familia', 14, 80);
     const colX = [14, 90, 130, 165];
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 100, 100);
-    doc.setFillColor(245, 247, 250);
-    doc.rect(14, 85, 182, 7, 'F');
-    headers.forEach((h, i) => doc.text(h, colX[i] + 2, 90));
+    doc.setFontSize(7); doc.setTextColor(155, 155, 151);
+    doc.setFillColor(247, 246, 242);
+    doc.rect(14, 83, 182, 6, 'F');
+    ['Familia', 'Mix actual %', 'Benchmark %', 'Gap pp'].forEach((h, i) => doc.text(h, colX[i] + 2, 87));
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     familyRows.forEach((row, idx) => {
-      const y = 97 + idx * 8;
-      if (idx % 2 === 0) {
-        doc.setFillColor(252, 252, 253);
-        doc.rect(14, y - 4, 182, 8, 'F');
-      }
-      doc.setTextColor(30, 58, 95);
-      doc.text(row.name, colX[0] + 2, y);
+      const y = 95 + idx * 7;
+      if (idx % 2 === 0) { doc.setFillColor(252, 252, 251); doc.rect(14, y - 4, 182, 7, 'F'); }
+      doc.setTextColor(26, 26, 24); doc.text(row.name, colX[0] + 2, y);
       doc.text(`${fmt(row.actual)}%`, colX[1] + 2, y);
       doc.text(`${fmt(row.benchmark)}%`, colX[2] + 2, y);
-      const gapStr = (row.gap >= 0 ? '+' : '') + fmt(row.gap);
-      doc.setTextColor(row.gap < -2 ? 220 : row.gap > 0 ? 22 : 100, row.gap < -2 ? 38 : row.gap > 0 ? 163 : 100, row.gap < -2 ? 38 : row.gap > 0 ? 74 : 100);
-      doc.text(gapStr, colX[3] + 2, y);
+      const gs = (row.gap >= 0 ? '+' : '') + fmt(row.gap);
+      doc.setTextColor(row.gap < -2 ? 201 : row.gap > 0 ? 45 : 107, row.gap < -2 ? 64 : row.gap > 0 ? 122 : 107, row.gap < -2 ? 64 : row.gap > 0 ? 79 : 103);
+      doc.text(gs, colX[3] + 2, y);
     });
 
-    // Recommendations
-    const recY = 97 + familyRows.length * 8 + 10;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 58, 95);
-    doc.text('Oportunidades de mejora', 14, recY);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(60, 60, 60);
+    const ry = 95 + familyRows.length * 7 + 8;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
+    doc.text('Oportunidades de mejora', 14, ry);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     top3.forEach((f, i) => {
-      const y = recY + 8 + i * 8;
-      doc.setFillColor(254, 242, 242);
-      doc.roundedRect(14, y - 5, 182, 7, 1, 1, 'F');
-      doc.text(`${i + 1}. ${f.name}: mix actual ${fmt(f.actual)}% vs benchmark ${fmt(f.benchmark)}% (gap ${fmt(f.gap)} pp)`, 18, y);
+      const y = ry + 7 + i * 7;
+      doc.setFillColor(254, 242, 242); doc.roundedRect(14, y - 4, 182, 6, 1, 1, 'F');
+      doc.setTextColor(60, 60, 60);
+      doc.text(`${i + 1}. ${f.name}: actual ${fmt(f.actual)}% vs benchmark ${fmt(f.benchmark)}% (gap ${fmt(f.gap)} pp)`, 17, y);
     });
 
     doc.save(`MixPower_${client.cliente.replace(/\s/g, '_')}.pdf`);
   };
 
+  const th: React.CSSProperties = {
+    textAlign: 'left', padding: '10px 14px',
+    fontSize: '11px', textTransform: 'uppercase',
+    letterSpacing: '0.06em', color: D.muted,
+    fontFamily: 'Inter, sans-serif', fontWeight: 500,
+    backgroundColor: D.bg, borderBottom: `1px solid ${D.border}`,
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full overflow-y-auto">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Backdrop */}
+      <div
+        style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(26,26,24,0.25)' }}
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div style={{
+        position: 'relative', width: '480px', maxWidth: '100vw',
+        backgroundColor: D.white, borderLeft: `1px solid ${D.border}`,
+        display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto',
+      }}>
         {/* Header */}
-        <div className="bg-[#1e3a5f] text-white px-6 py-5 flex items-start justify-between">
+        <div style={{ padding: '28px 28px 20px', borderBottom: `1px solid ${D.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2 className="text-xl font-bold">{client.cliente}</h2>
-            <p className="text-blue-200 text-sm mt-0.5">{client.ciudad} · {client.segmento} · {client.volumen} t</p>
+            <h2 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '24px', color: D.dark, fontWeight: 400, margin: '0 0 4px 0' }}>
+              {client.cliente}
+            </h2>
+            <p style={{ fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+              {client.ciudad} · {client.segmento} · {client.volumen.toLocaleString('es-ES')} t
+            </p>
           </div>
-          <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors mt-0.5">
-            <X size={22} />
+          <button onClick={onClose} style={{ color: D.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-6 flex flex-col gap-6">
+        <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Priority + export */}
-          <div className="flex items-center justify-between">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <PriorityBadge priority={client.priority} color={client.priorityColor} />
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 bg-[#1e3a5f] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#16325a] transition-colors"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: D.dark, color: '#fff', border: 'none', borderRadius: '6px', padding: '8px 14px', fontSize: '12px', fontFamily: 'Inter, sans-serif', fontWeight: 500, cursor: 'pointer' }}
             >
-              <Download size={15} />
-              Exportar informe PDF
+              <Download size={13} />
+              Exportar PDF
             </button>
           </div>
 
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Metrics 2×2 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             {[
-              { label: 'Margen actual', value: `${fmt(client.actualMargin)}%`, accent: 'text-[#1e3a5f]' },
-              { label: 'Mix Power', value: <MixPowerBar value={client.mixPower} />, accent: '' },
-              { label: 'Gap vs benchmark', value: `${fmt(client.gap)} pp`, accent: client.gap > 0 ? 'text-red-600' : 'text-green-600' },
-              { label: 'Oportunidad (€)', value: fmtEur(client.opportunityEuros), accent: 'text-[#1e3a5f]' },
+              { label: 'Margen actual',   value: `${fmt(client.actualMargin)}%` },
+              { label: 'Mix Power',       value: null, custom: <MixPowerBar value={client.mixPower} /> },
+              { label: 'Gap vs benchmark', value: `${fmt(client.gap)} pp`, color: client.gap > 0 ? D.red : D.green },
+              { label: 'Oportunidad',     value: fmtEur(client.opportunityEuros) },
             ].map((m, i) => (
-              <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-                <p className="text-xs text-gray-500 font-medium mb-1">{m.label}</p>
-                <div className={`text-lg font-bold ${m.accent}`}>{m.value}</div>
+              <div key={i} style={{ backgroundColor: D.bg, borderRadius: '8px', padding: '16px' }}>
+                <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {m.label}
+                </p>
+                {m.custom
+                  ? m.custom
+                  : <p style={{ fontSize: '18px', fontFamily: '"Instrument Serif", Georgia, serif', color: m.color ?? D.dark, margin: 0, lineHeight: 1 }}>
+                      {m.value}
+                    </p>
+                }
               </div>
             ))}
           </div>
 
           {/* Family table */}
           <div>
-            <h3 className="text-sm font-semibold text-[#1e3a5f] mb-3">Mix por familia de producto</h3>
-            <div className="rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: '0 0 10px 0' }}>
+              Mix por familia de producto
+            </p>
+            <div style={{ border: `1px solid ${D.border}`, borderRadius: '8px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
-                  <tr className="bg-gray-50 text-gray-500 text-xs font-semibold uppercase">
-                    <th className="text-left px-4 py-3">Familia</th>
-                    <th className="text-right px-4 py-3">Actual %</th>
-                    <th className="text-right px-4 py-3">Benchmark %</th>
-                    <th className="text-right px-4 py-3">Gap pp</th>
-                    <th className="px-4 py-3 w-24"></th>
+                  <tr>
+                    <th style={{ ...th, textAlign: 'left' }}>Familia</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Actual</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Bench.</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Gap</th>
+                    <th style={{ ...th, width: '60px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {familyRows.map((row, i) => {
-                    const isUnderdev = row.gap < -2;
+                    const isUnder = row.gap < -2;
                     const isAbove = row.gap > 0;
-                    const barPct = Math.min(Math.abs(row.gap) * 5, 100);
+                    const barPct  = Math.min(Math.abs(row.gap) * 5, 100);
+                    const gapColor = isUnder ? D.red : isAbove ? D.green : D.muted;
                     return (
-                      <tr key={row.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                        <td className="px-4 py-2.5 font-medium text-gray-800">{row.name}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmt(row.actual)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmt(row.benchmark)}</td>
-                        <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${isUnderdev ? 'text-red-600' : isAbove ? 'text-green-600' : 'text-gray-500'}`}>
+                      <tr key={row.id} style={{ borderBottom: i < familyRows.length - 1 ? `1px solid ${D.border}` : 'none', backgroundColor: i % 2 === 0 ? D.white : D.bg }}>
+                        <td style={{ padding: '10px 14px', color: D.dark, fontFamily: 'Inter, sans-serif' }}>{row.name}</td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right', color: D.sec, fontFamily: 'Inter, sans-serif' }}>{fmt(row.actual)}%</td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right', color: D.muted, fontFamily: 'Inter, sans-serif' }}>{fmt(row.benchmark)}%</td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: gapColor, fontFamily: 'Inter, sans-serif' }}>
                           {(row.gap >= 0 ? '+' : '') + fmt(row.gap)}
                         </td>
-                        <td className="px-4 py-2.5">
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-2 rounded-full"
-                              style={{
-                                width: `${barPct}%`,
-                                backgroundColor: isUnderdev ? '#dc2626' : isAbove ? '#16a34a' : '#9ca3af',
-                              }}
-                            />
+                        <td style={{ padding: '10px 14px' }}>
+                          <div style={{ height: '3px', backgroundColor: D.border, borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ height: '3px', width: `${barPct}%`, backgroundColor: gapColor, borderRadius: '2px' }} />
                           </div>
                         </td>
                       </tr>
@@ -231,20 +233,20 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
 
           {/* Recommendations */}
           {top3.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-amber-800 mb-2">Oportunidades de mejora detectadas</h3>
-              <p className="text-xs text-amber-700 mb-3">
-                Las 3 familias con mayor potencial de recuperación de margen para este cliente son:
+            <div style={{ border: `1px solid ${D.border}`, borderRadius: '8px', padding: '20px', backgroundColor: D.bg }}>
+              <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: '0 0 12px 0' }}>
+                Oportunidades de mejora
               </p>
-              <ul className="space-y-2">
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {top3.map((f, i) => (
-                  <li key={f.id} className="flex items-start gap-2 text-sm">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-xs flex items-center justify-center font-bold">
+                  <li key={f.id} style={{ display: 'flex', gap: '10px', fontSize: '13px', fontFamily: 'Inter, sans-serif' }}>
+                    <span style={{ flexShrink: 0, width: '20px', height: '20px', borderRadius: '50%', backgroundColor: D.dark, color: '#fff', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>
                       {i + 1}
                     </span>
-                    <span className="text-amber-900">
-                      <strong>{f.name}</strong>: mix actual {fmt(f.actual)}% vs benchmark {fmt(f.benchmark)}%
-                      — gap de <strong className="text-red-600">{fmt(Math.abs(f.gap))} pp</strong> a desarrollar
+                    <span style={{ color: D.sec, lineHeight: '1.5' }}>
+                      <strong style={{ color: D.dark }}>{f.name}</strong>{' '}
+                      — actual {fmt(f.actual)}% vs benchmark {fmt(f.benchmark)}%{' '}
+                      (<strong style={{ color: D.red }}>{fmt(Math.abs(f.gap))} pp</strong> de gap)
                     </span>
                   </li>
                 ))}
@@ -253,8 +255,8 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
           )}
 
           {top3.length === 0 && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
-              Este cliente tiene un mix excelente. Está por encima del benchmark en todas las familias clave.
+            <div style={{ border: `1px solid #A7F3D0`, borderRadius: '8px', padding: '16px', backgroundColor: '#F0FDF4', fontSize: '13px', color: '#065F46', fontFamily: 'Inter, sans-serif' }}>
+              Mix excelente. Este cliente está por encima del benchmark en todas las familias clave.
             </div>
           )}
         </div>

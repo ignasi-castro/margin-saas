@@ -7,16 +7,25 @@ interface Props {
   color: ProcessedClient['priorityColor'];
 }
 
-const styles: Record<string, string> = {
-  red: 'bg-red-100 text-red-700 border border-red-300',
-  orange: 'bg-orange-100 text-orange-700 border border-orange-300',
-  blue: 'bg-blue-100 text-blue-700 border border-blue-300',
-  green: 'bg-green-100 text-green-700 border border-green-300',
+const styles: Record<string, React.CSSProperties> = {
+  red:    { backgroundColor: '#FEE2E2', color: '#991B1B' },
+  orange: { backgroundColor: '#FEF3C7', color: '#92400E' },
+  blue:   { backgroundColor: '#E0F2FE', color: '#075985' },
+  green:  { backgroundColor: '#D1FAE5', color: '#065F46' },
 };
 
 export default function PriorityBadge({ priority, color }: Props) {
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${styles[color]}`}>
+    <span style={{
+      ...styles[color],
+      borderRadius: '100px',
+      padding: '3px 10px',
+      fontSize: '11px',
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: 500,
+      display: 'inline-block',
+      whiteSpace: 'nowrap',
+    }}>
       {priority}
     </span>
   );

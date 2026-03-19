@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, Settings, Upload, ChevronUp, ChevronDown, ChevronsUpDown, LogOut } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, LogOut, Upload, Settings } from 'lucide-react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
 import { loadProcessedClients, loadCompany, loadConfig } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
@@ -12,40 +12,44 @@ import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
 import ClientDetailPanel from '@/components/ClientDetailPanel';
 
+const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC' };
+
+function Logo() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden>
+      <rect x="4"  y="2"  width="11" height="20" rx="2.5" fill={D.dark} />
+      <rect x="17" y="10" width="11" height="20" rx="2.5" fill={D.dark} />
+      <rect x="10" y="10" width="11" height="12" rx="0"   fill={D.bg} />
+    </svg>
+  );
+}
+
 type SortKey = keyof ProcessedClient;
 type SortDir = 'asc' | 'desc';
 
 function fmtEur(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
-
-function fmt(n: number, d = 1) {
-  return n.toFixed(d);
-}
+function fmt(n: number, d = 1) { return n.toFixed(d); }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [clients, setClients] = useState<ProcessedClient[]>([]);
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [company, setCompany] = useState('');
-  const [selected, setSelected] = useState<ProcessedClient | null>(null);
-  const [segmentFilter, setSegmentFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('opportunityEuros');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [clients, setClients]   = useState<ProcessedClient[]>([]);
+  const [config, setConfig]     = useState<AppConfig | null>(null);
+  const [company, setCompany]   = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [selected, setSelected] = useState<ProcessedClient | null>(null);
+  const [segFilter, setSegFilter] = useState('');
+  const [priFilter, setPriFilter] = useState('');
+  const [sortKey, setSortKey]   = useState<SortKey>('opportunityEuros');
+  const [sortDir, setSortDir]   = useState<SortDir>('desc');
 
   useEffect(() => {
     const loaded = loadProcessedClients();
-    if (loaded.length === 0) {
-      router.push('/onboarding');
-      return;
-    }
+    if (loaded.length === 0) { router.push('/onboarding'); return; }
     setClients(loaded);
     setCompany(loadCompany());
     setConfig(loadConfig());
-
-    // Get current user email
     createClient().auth.getUser().then(({ data }) => {
       if (data.user?.email) setUserEmail(data.user.email);
     });
@@ -57,253 +61,184 @@ export default function DashboardPage() {
     router.refresh();
   };
 
-  const segments = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))), [clients]);
+  const segments   = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))), [clients]);
   const priorities = ['Muy Alta', 'Alta', 'Media', 'Mantener'];
 
   const filtered = useMemo(() => {
     let list = [...clients];
-    if (segmentFilter) list = list.filter(c => c.segmento === segmentFilter);
-    if (priorityFilter) list = list.filter(c => c.priority === priorityFilter);
+    if (segFilter) list = list.filter(c => c.segmento === segFilter);
+    if (priFilter) list = list.filter(c => c.priority === priFilter);
     list.sort((a, b) => {
       const va = a[sortKey] as number | string;
       const vb = b[sortKey] as number | string;
-      if (typeof va === 'number' && typeof vb === 'number') {
-        return sortDir === 'asc' ? va - vb : vb - va;
-      }
-      return sortDir === 'asc'
-        ? String(va).localeCompare(String(vb))
-        : String(vb).localeCompare(String(va));
+      if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
+      return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
     return list;
-  }, [clients, segmentFilter, priorityFilter, sortKey, sortDir]);
+  }, [clients, segFilter, priFilter, sortKey, sortDir]);
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
-    }
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
   };
 
-  const avgMargin = clients.length ? clients.reduce((s, c) => s + c.actualMargin, 0) / clients.length : 0;
+  const avgMargin      = clients.length ? clients.reduce((s, c) => s + c.actualMargin, 0) / clients.length : 0;
   const totalOpportunity = clients.reduce((s, c) => s + c.opportunityEuros, 0);
-  const avgMixPower = clients.length ? clients.reduce((s, c) => s + c.mixPower, 0) / clients.length : 0;
-  const urgentCount = clients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
+  const avgMixPower    = clients.length ? clients.reduce((s, c) => s + c.mixPower, 0) / clients.length : 0;
+  const urgentCount    = clients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
+
+  const now = new Date();
+  const subtitle = `Cartera de clientes · ${now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
 
   const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return <ChevronsUpDown size={13} className="text-gray-300 ml-1 inline" />;
+    if (sortKey !== k) return <ChevronsUpDown size={12} style={{ color: D.border, display: 'inline', marginLeft: '4px' }} />;
     return sortDir === 'asc'
-      ? <ChevronUp size={13} className="text-[#1e3a5f] ml-1 inline" />
-      : <ChevronDown size={13} className="text-[#1e3a5f] ml-1 inline" />;
+      ? <ChevronUp   size={12} style={{ color: D.dark, display: 'inline', marginLeft: '4px' }} />
+      : <ChevronDown size={12} style={{ color: D.dark, display: 'inline', marginLeft: '4px' }} />;
   };
 
-  const thClass = (k: SortKey) =>
-    `px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 cursor-pointer select-none whitespace-nowrap hover:text-[#1e3a5f] transition-colors ${sortKey === k ? 'text-[#1e3a5f]' : ''}`;
+  const thStyle: React.CSSProperties = {
+    padding: '12px 16px', textAlign: 'left',
+    fontSize: '11px', fontFamily: 'Inter, sans-serif', fontWeight: 500,
+    textTransform: 'uppercase', letterSpacing: '0.06em', color: D.muted,
+    backgroundColor: D.bg, borderBottom: `1px solid ${D.border}`,
+    cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none',
+  };
 
   if (clients.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">Cargando...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: D.muted, fontFamily: 'Inter, sans-serif', fontSize: '14px' }}>Cargando...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Top bar */}
-      <nav className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#1e3a5f] rounded-lg flex items-center justify-center">
-            <TrendingUp size={16} className="text-white" />
-          </div>
-          <span className="text-lg font-bold text-[#1e3a5f]">MixPower</span>
-          {company && (
-            <>
-              <span className="text-gray-300">·</span>
-              <span className="text-sm text-gray-500 font-medium">{company}</span>
-            </>
-          )}
+    <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', flexDirection: 'column' }}>
+
+      {/* Navbar */}
+      <nav style={{ backgroundColor: D.bg, borderBottom: `1px solid ${D.border}`, height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 48px', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Logo />
+          <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '16px', color: D.dark }}>MixPower</span>
         </div>
-        <div className="flex items-center gap-4">
-          <Link
-            href="/onboarding"
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1e3a5f] font-medium transition-colors"
-          >
-            <Upload size={15} />
-            Nueva carga
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <Link href="/onboarding" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', textDecoration: 'none' }}>
+            <Upload size={13} /> Subir datos
           </Link>
-          <Link
-            href="/configuracion"
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1e3a5f] font-medium transition-colors"
-          >
-            <Settings size={15} />
-            Configuración
+          <Link href="/configuracion" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', textDecoration: 'none' }}>
+            <Settings size={13} /> Configuración
           </Link>
           {userEmail && (
-            <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
-              <span className="text-xs text-gray-400 hidden sm:block" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingLeft: '16px', borderLeft: `1px solid ${D.border}` }}>
+              <span style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {userEmail}
               </span>
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-500 transition-colors"
-                title="Cerrar sesión"
-              >
-                <LogOut size={15} />
-                <span className="hidden sm:inline">Cerrar sesión</span>
+              <button onClick={handleSignOut} title="Cerrar sesión"
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                <LogOut size={14} />
               </button>
             </div>
           )}
         </div>
       </nav>
 
-      <main className="flex-1 px-6 py-6 max-w-screen-xl mx-auto w-full">
+      <main style={{ flex: 1, padding: '40px 48px', maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+
+        {/* Title */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '32px', fontWeight: 400, color: D.dark, margin: '0 0 4px 0', lineHeight: 1.1 }}>
+            {company || 'Tu cartera'}
+          </h1>
+          <p style={{ fontSize: '14px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0, textTransform: 'capitalize' }}>
+            {subtitle}
+          </p>
+        </div>
+
         {/* Metric cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <MetricCard
-            title="Margen medio de cartera"
-            value={`${fmt(avgMargin)}%`}
-            subtitle="Media ponderada de todos los clientes"
-          />
-          <MetricCard
-            title="Oportunidad total de margen"
-            value={fmtEur(totalOpportunity)}
-            subtitle="Margen recuperable en 6 meses"
-            accent="green"
-          />
-          <MetricCard
-            title="Mix Power medio"
-            value={fmt(avgMixPower, 2)}
-            subtitle="vs. benchmark de cada segmento"
-            accent={avgMixPower < 0.65 ? 'red' : avgMixPower < 0.80 ? 'default' : 'blue'}
-          />
-          <MetricCard
-            title="Clientes prioritarios"
-            value={String(urgentCount)}
-            subtitle="Con prioridad Muy Alta o Alta"
-            accent="red"
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
+          <MetricCard label="Margen medio de cartera"    value={`${fmt(avgMargin)}%`}        subtitle="Media ponderada de clientes" />
+          <MetricCard label="Oportunidad total"          value={fmtEur(totalOpportunity)}    subtitle="Recuperable en 6 meses" />
+          <MetricCard label="Mix Power medio"            value={fmt(avgMixPower, 2)}         subtitle="vs. benchmark de segmento" />
+          <MetricCard label="Clientes prioritarios"      value={String(urgentCount)}         subtitle="Prioridad Muy Alta o Alta" />
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <select
-            value={segmentFilter}
-            onChange={e => setSegmentFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f]"
-          >
-            <option value="">Todos los segmentos</option>
-            {segments.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select
-            value={priorityFilter}
-            onChange={e => setPriorityFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f]"
-          >
-            <option value="">Todas las prioridades</option>
-            {priorities.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          {(segmentFilter || priorityFilter) && (
-            <button
-              onClick={() => { setSegmentFilter(''); setPriorityFilter(''); }}
-              className="text-sm text-gray-400 hover:text-gray-600 underline"
-            >
-              Limpiar filtros
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {[
+            { value: segFilter, setter: setSegFilter, options: segments, placeholder: 'Todos los segmentos' },
+            { value: priFilter, setter: setPriFilter, options: priorities, placeholder: 'Todas las prioridades' },
+          ].map((f, i) => (
+            <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
+              style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
+              <option value="">{f.placeholder}</option>
+              {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {(segFilter || priFilter) && (
+            <button onClick={() => { setSegFilter(''); setPriFilter(''); }}
+              style={{ fontSize: '13px', color: D.muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', textDecoration: 'underline' }}>
+              Limpiar
             </button>
           )}
-          <span className="ml-auto text-sm text-gray-400">{filtered.length} clientes</span>
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>
+            {filtered.length} clientes
+          </span>
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: 'Inter, sans-serif' }}>
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className={thClass('cliente')} onClick={() => handleSort('cliente')}>
-                    Cliente <SortIcon k="cliente" />
-                  </th>
-                  <th className={thClass('ciudad')} onClick={() => handleSort('ciudad')}>
-                    Ciudad <SortIcon k="ciudad" />
-                  </th>
-                  <th className={thClass('segmento')} onClick={() => handleSort('segmento')}>
-                    Segmento <SortIcon k="segmento" />
-                  </th>
-                  <th className={thClass('volumen')} onClick={() => handleSort('volumen')}>
-                    Volumen (t) <SortIcon k="volumen" />
-                  </th>
-                  <th className={thClass('actualMargin')} onClick={() => handleSort('actualMargin')}>
-                    Margen actual <SortIcon k="actualMargin" />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 min-w-[160px]">
-                    Mix Power
-                  </th>
-                  <th className={thClass('gap')} onClick={() => handleSort('gap')}>
-                    Gap (pp) <SortIcon k="gap" />
-                  </th>
-                  <th className={thClass('potentialMargin6M')} onClick={() => handleSort('potentialMargin6M')}>
-                    Margen 6M <SortIcon k="potentialMargin6M" />
-                  </th>
-                  <th className={thClass('opportunityEuros')} onClick={() => handleSort('opportunityEuros')}>
-                    Oportunidad (€) <SortIcon k="opportunityEuros" />
-                  </th>
-                  <th className={thClass('priority')} onClick={() => handleSort('priority')}>
-                    Prioridad <SortIcon k="priority" />
-                  </th>
+                <tr>
+                  {([
+                    ['cliente', 'Cliente'], ['ciudad', 'Ciudad'], ['segmento', 'Segmento'],
+                    ['volumen', 'Volumen (t)'], ['actualMargin', 'Margen actual'],
+                    [null, 'Mix Power'],
+                    ['gap', 'Gap (pp)'], ['potentialMargin6M', 'Margen 6M'],
+                    ['opportunityEuros', 'Oportunidad (€)'], ['priority', 'Prioridad'],
+                  ] as [SortKey | null, string][]).map(([key, label]) => (
+                    <th key={label} style={thStyle} onClick={key ? () => handleSort(key) : undefined}>
+                      {label}{key && <SortIcon k={key} />}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((client, i) => (
-                  <tr
-                    key={`${client.cliente}-${i}`}
-                    className="border-b border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors"
-                    onClick={() => setSelected(client)}
-                  >
-                    <td className="px-4 py-3 font-semibold text-[#1e3a5f]">{client.cliente}</td>
-                    <td className="px-4 py-3 text-gray-600">{client.ciudad}</td>
-                    <td className="px-4 py-3 text-gray-600">{client.segmento}</td>
-                    <td className="px-4 py-3 text-gray-700 tabular-nums">
-                      {client.volumen.toLocaleString('es-ES')}
+                {filtered.map((c, i) => (
+                  <tr key={`${c.cliente}-${i}`}
+                    onClick={() => setSelected(c)}
+                    style={{ borderBottom: `1px solid ${D.border}`, cursor: 'pointer', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = D.bg)}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = D.white)}>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontWeight: 500 }}>{c.cliente}</td>
+                    <td style={{ padding: '14px 16px', color: D.sec }}>{c.ciudad}</td>
+                    <td style={{ padding: '14px 16px', color: D.sec }}>{c.segmento}</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{c.volumen.toLocaleString('es-ES')}</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.actualMargin)}%</td>
+                    <td style={{ padding: '14px 16px' }}><MixPowerBar value={c.mixPower} /></td>
+                    <td style={{ padding: '14px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: c.gap > 0 ? '#C94040' : '#2D7A4F' }}>
+                      {c.gap > 0 ? '+' : ''}{fmt(c.gap)}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 tabular-nums font-medium">
-                      {fmt(client.actualMargin)}%
-                    </td>
-                    <td className="px-4 py-3">
-                      <MixPowerBar value={client.mixPower} />
-                    </td>
-                    <td className={`px-4 py-3 tabular-nums font-semibold ${client.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {client.gap > 0 ? '+' : ''}{fmt(client.gap)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 tabular-nums">
-                      {fmt(client.potentialMargin6M)}%
-                    </td>
-                    <td className="px-4 py-3 tabular-nums font-semibold text-[#1e3a5f]">
-                      {fmtEur(client.opportunityEuros)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge priority={client.priority} color={client.priorityColor} />
-                    </td>
+                    <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.potentialMargin6M)}%</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{fmtEur(c.opportunityEuros)}</td>
+                    <td style={{ padding: '14px 16px' }}><PriorityBadge priority={c.priority} color={c.priorityColor} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
           {filtered.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">
-              No hay clientes que coincidan con los filtros seleccionados
+            <div style={{ padding: '64px', textAlign: 'center', color: D.muted, fontSize: '14px', fontFamily: 'Inter, sans-serif' }}>
+              No hay clientes que coincidan con los filtros
             </div>
           )}
         </div>
       </main>
 
       {selected && config && (
-        <ClientDetailPanel
-          client={selected}
-          config={config}
-          onClose={() => setSelected(null)}
-        />
+        <ClientDetailPanel client={selected} config={config} onClose={() => setSelected(null)} />
       )}
     </div>
   );
