@@ -7,9 +7,10 @@ import Link from 'next/link';
 import { Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { ClientRow } from '@/lib/types';
 import { validateRow } from '@/lib/calculations';
-import { saveRawClients } from '@/lib/store';
+import { saveRawClients, loadProcessedClients } from '@/lib/store';
 import { SAMPLE_CSV } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
+import { saveSnapshot } from '@/lib/snapshots';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC', green: '#2D7A4F', red: '#C94040' };
 
@@ -23,15 +24,27 @@ function Logo() {
   );
 }
 
+function defaultSnapshotName() {
+  const now = new Date();
+  const mes = now.toLocaleDateString('es-ES', { month: 'long' });
+  return `Análisis ${mes} ${now.getFullYear()}`;
+}
+
 interface ParsedResult { rows: ClientRow[]; errors: string[]; }
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [company, setCompany]   = useState('');
-  const [greeting, setGreeting] = useState('');
+  const [company, setCompany]       = useState('');
+  const [greeting, setGreeting]     = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [result, setResult]     = useState<ParsedResult | null>(null);
-  const [fileName, setFileName] = useState('');
+  const [result, setResult]         = useState<ParsedResult | null>(null);
+  const [fileName, setFileName]     = useState('');
+
+  // Modal de guardar snapshot
+  const [showModal, setShowModal]       = useState(false);
+  const [snapshotName, setSnapshotName] = useState('');
+  const [saving, setSaving]             = useState(false);
+  const [saveError, setSaveError]       = useState('');
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
@@ -87,9 +100,32 @@ export default function OnboardingPage() {
     a.click(); URL.revokeObjectURL(url);
   };
 
+  // Al hacer clic en "Ver dashboard" guardamos los datos localmente y mostramos el modal
   const handleContinue = () => {
     if (!result || result.rows.length === 0 || result.errors.length > 0) return;
     saveRawClients(result.rows, company || 'Mi empresa');
+    setSnapshotName(defaultSnapshotName());
+    setSaveError('');
+    setShowModal(true);
+  };
+
+  const handleSaveAndContinue = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const processed = loadProcessedClients();
+      await saveSnapshot(snapshotName || defaultSnapshotName(), processed);
+    } catch {
+      setSaveError('No se pudo guardar el histórico. Continuando sin guardar.');
+      await new Promise(r => setTimeout(r, 1500));
+    } finally {
+      setSaving(false);
+      router.push('/dashboard');
+    }
+  };
+
+  const handleSkipSave = () => {
+    setShowModal(false);
     router.push('/dashboard');
   };
 
@@ -189,7 +225,7 @@ export default function OnboardingPage() {
                 cliente, ciudad, segmento, F1–F10, volumen
               </p>
               <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '6px 0 0 0' }}>
-                F1–F10 deben sumar 100 por cliente. Volumen en toneladas.
+                F1–F10 deben sumar 100 por cliente. Volumen en toneladas. Columnas opcionales: region, comercial, ventas.
               </p>
             </div>
           </div>
@@ -241,6 +277,57 @@ export default function OnboardingPage() {
           </button>
         </div>
       </main>
+
+      {/* Modal guardar snapshot */}
+      {showModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          {/* Backdrop */}
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(26,26,24,0.4)' }} />
+
+          {/* Card */}
+          <div style={{ position: 'relative', width: '100%', maxWidth: '480px', backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '12px', padding: '32px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+            <h2 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '24px', fontWeight: 400, color: D.dark, margin: '0 0 8px 0' }}>
+              ¿Guardar como histórico?
+            </h2>
+            <p style={{ fontSize: '14px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: '0 0 24px 0', lineHeight: 1.5 }}>
+              Guarda este análisis en Supabase para poder comparar la evolución de tu cartera en el futuro.
+            </p>
+
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              Nombre del análisis
+            </label>
+            <input
+              type="text"
+              value={snapshotName}
+              onChange={e => setSnapshotName(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '10px 14px', fontSize: '14px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.bg, outline: 'none', marginBottom: '8px' }}
+              onFocus={e => (e.target.style.borderColor = D.dark)}
+              onBlur={e  => (e.target.style.borderColor = D.border)}
+            />
+
+            {saveError && (
+              <p style={{ fontSize: '12px', color: D.red, fontFamily: 'Inter, sans-serif', margin: '0 0 12px 0' }}>{saveError}</p>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={handleSaveAndContinue}
+                disabled={saving}
+                style={{ flex: 1, padding: '12px', borderRadius: '6px', fontSize: '14px', fontFamily: 'Inter, sans-serif', fontWeight: 500, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', backgroundColor: D.dark, color: '#fff', opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? 'Guardando...' : 'Guardar y continuar'}
+              </button>
+              <button
+                onClick={handleSkipSave}
+                disabled={saving}
+                style={{ flex: 1, padding: '12px', borderRadius: '6px', fontSize: '14px', fontFamily: 'Inter, sans-serif', fontWeight: 400, border: `1px solid ${D.border}`, cursor: 'pointer', backgroundColor: D.white, color: D.sec }}
+              >
+                Continuar sin guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

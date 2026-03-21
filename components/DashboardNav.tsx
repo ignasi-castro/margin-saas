@@ -23,6 +23,7 @@ const TABS = [
   { label: 'Resumen',        href: '/dashboard' },
   { label: 'Clientes',       href: '/dashboard/tabla' },
   { label: 'Plan de acción', href: '/dashboard/plan' },
+  { label: 'Histórico',      href: '/dashboard/historico' },
 ];
 
 export default function DashboardNav() {
