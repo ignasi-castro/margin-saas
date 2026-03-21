@@ -13,6 +13,7 @@ export interface ClientRow {
   F9: number;
   F10: number;
   volumen: number;
+  ventas?: number; // ventas totales en €; si no viene en CSV se calcula como volumen * 800
 }
 
 export interface ProductFamily {
@@ -43,13 +44,14 @@ export interface ProcessedClient {
   ciudad: string;
   segmento: string;
   volumen: number;
+  ventas: number; // ventas totales en €
   mix: Record<string, number>;
   actualMargin: number;
   benchmarkMargin: number;
   mixPower: number;
-  gap: number;
+  gap: number; // siempre >= 0
   potentialMargin6M: number;
-  opportunityEuros: number;
+  opportunityEuros: number; // siempre >= 0
   opportunityPtTon: number;
   priority: 'Muy Alta' | 'Alta' | 'Media' | 'Mantener';
   priorityColor: 'red' | 'orange' | 'blue' | 'green';

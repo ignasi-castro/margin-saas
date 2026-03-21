@@ -30,6 +30,10 @@ type SortDir = 'asc' | 'desc';
 function fmtEur(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
+function fmtVentas(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')}M€`;
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+}
 function fmt(n: number, d = 1) { return n.toFixed(d); }
 
 export default function DashboardPage() {
@@ -194,7 +198,7 @@ export default function DashboardPage() {
                 <tr>
                   {([
                     ['cliente', 'Cliente'], ['ciudad', 'Ciudad'], ['segmento', 'Segmento'],
-                    ['volumen', 'Volumen (t)'], ['actualMargin', 'Margen actual'],
+                    ['ventas', 'Ventas (€)'], ['volumen', 'Volumen (t)'], ['actualMargin', 'Margen actual'],
                     [null, 'Mix Power'],
                     ['gap', 'Gap (pp)'], ['potentialMargin6M', 'Margen 6M'],
                     ['opportunityEuros', 'Oportunidad (€)'], ['priority', 'Prioridad'],
@@ -212,14 +216,24 @@ export default function DashboardPage() {
                     style={{ borderBottom: `1px solid ${D.border}`, cursor: 'pointer', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = D.bg)}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = D.white)}>
-                    <td style={{ padding: '14px 16px', color: D.dark, fontWeight: 500 }}>{c.cliente}</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontWeight: 500 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {c.cliente}
+                        {c.mixPower >= 1.0 && (
+                          <span style={{ fontSize: '10px', fontWeight: 600, color: '#065F46', backgroundColor: '#D1FAE5', borderRadius: '100px', padding: '2px 7px', fontFamily: 'Inter, sans-serif', letterSpacing: '0.04em', flexShrink: 0 }}>
+                            Benchmark
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td style={{ padding: '14px 16px', color: D.sec }}>{c.ciudad}</td>
                     <td style={{ padding: '14px 16px', color: D.sec }}>{c.segmento}</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{fmtVentas(c.ventas)}</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{c.volumen.toLocaleString('es-ES')}</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.actualMargin)}%</td>
                     <td style={{ padding: '14px 16px' }}><MixPowerBar value={c.mixPower} /></td>
                     <td style={{ padding: '14px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: c.gap > 0 ? '#C94040' : '#2D7A4F' }}>
-                      {c.gap > 0 ? '+' : ''}{fmt(c.gap)}
+                      {c.gap > 0 ? `+${fmt(c.gap)}` : fmt(c.gap)}
                     </td>
                     <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.potentialMargin6M)}%</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{fmtEur(c.opportunityEuros)}</td>

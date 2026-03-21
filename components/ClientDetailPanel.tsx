@@ -1,14 +1,22 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
 import PriorityBadge from './PriorityBadge';
 import MixPowerBar from './MixPowerBar';
-import { X, Download } from 'lucide-react';
+import { X, Download, Plus } from 'lucide-react';
 
 interface Props {
   client: ProcessedClient;
   config: AppConfig;
   onClose: () => void;
+}
+
+interface ActionRow {
+  accion: string;
+  responsable: string;
+  objetivo: string;
+  fecha: string;
 }
 
 const D = {
@@ -27,6 +35,12 @@ function fmtEur(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
+const EMPTY_ROW: ActionRow = { accion: '', responsable: '', objetivo: '', fecha: '' };
+
+function planKey(cliente: string) {
+  return `mixpower_plan_${cliente.replace(/\s+/g, '_')}`;
+}
+
 export default function ClientDetailPanel({ client, config, onClose }: Props) {
   const segment = config.segments.find(s =>
     s.name.toLowerCase().trim() === client.segmento.toLowerCase().trim()
@@ -39,6 +53,30 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
   });
 
   const top3 = [...familyRows].filter(f => f.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
+
+  // Action plan state
+  const [plan, setPlan] = useState<ActionRow[]>([EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(planKey(client.cliente));
+      if (stored) setPlan(JSON.parse(stored));
+    } catch {}
+  }, [client.cliente]);
+
+  const savePlan = (rows: ActionRow[]) => {
+    setPlan(rows);
+    try {
+      localStorage.setItem(planKey(client.cliente), JSON.stringify(rows));
+    } catch {}
+  };
+
+  const updatePlanRow = (idx: number, field: keyof ActionRow, value: string) => {
+    const updated = plan.map((r, i) => i === idx ? { ...r, [field]: value } : r);
+    savePlan(updated);
+  };
+
+  const addPlanRow = () => savePlan([...plan, { ...EMPTY_ROW }]);
 
   const handleExportPDF = async () => {
     const { default: jsPDF } = await import('jspdf');
@@ -67,7 +105,7 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
     const metrics = [
       { label: 'Margen actual', value: `${fmt(client.actualMargin)}%` },
       { label: 'Mix Power',     value: fmt(client.mixPower, 2) },
-      { label: 'Gap',           value: `${fmt(client.gap)} pp` },
+      { label: 'Gap',           value: client.gap > 0 ? `+${fmt(client.gap)} pp` : `${fmt(client.gap)} pp` },
       { label: 'Oportunidad',   value: fmtEur(client.opportunityEuros) },
     ];
     let mx = 14;
@@ -113,6 +151,29 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
       doc.text(`${i + 1}. ${f.name}: actual ${fmt(f.actual)}% vs benchmark ${fmt(f.benchmark)}% (gap ${fmt(f.gap)} pp)`, 17, y);
     });
 
+    // Plan de acción
+    const filledRows = plan.filter(r => r.accion || r.responsable || r.objetivo || r.fecha);
+    if (filledRows.length > 0) {
+      const py = ry + top3.length * 7 + 20;
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
+      doc.text('Plan de acción', 14, py);
+      const pcols = [14, 70, 120, 155];
+      doc.setFontSize(7); doc.setTextColor(155, 155, 151);
+      doc.setFillColor(247, 246, 242);
+      doc.rect(14, py + 3, 182, 6, 'F');
+      ['Acción', 'Responsable', 'Objetivo', 'Fecha'].forEach((h, i) => doc.text(h, pcols[i] + 2, py + 7));
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      filledRows.forEach((r, idx) => {
+        const y = py + 15 + idx * 7;
+        if (idx % 2 === 0) { doc.setFillColor(252, 252, 251); doc.rect(14, y - 4, 182, 7, 'F'); }
+        doc.setTextColor(26, 26, 24);
+        doc.text(r.accion.slice(0, 30), pcols[0] + 2, y);
+        doc.text(r.responsable.slice(0, 20), pcols[1] + 2, y);
+        doc.text(r.objetivo.slice(0, 18), pcols[2] + 2, y);
+        doc.text(r.fecha.slice(0, 12), pcols[3] + 2, y);
+      });
+    }
+
     doc.save(`MixPower_${client.cliente.replace(/\s/g, '_')}.pdf`);
   };
 
@@ -122,6 +183,12 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
     letterSpacing: '0.06em', color: D.muted,
     fontFamily: 'Inter, sans-serif', fontWeight: 500,
     backgroundColor: D.bg, borderBottom: `1px solid ${D.border}`,
+  };
+
+  const planInputStyle: React.CSSProperties = {
+    width: '100%', border: `1px solid ${D.border}`, borderRadius: '4px',
+    padding: '5px 8px', fontSize: '12px', fontFamily: 'Inter, sans-serif',
+    color: D.dark, backgroundColor: D.white, outline: 'none', boxSizing: 'border-box',
   };
 
   return (
@@ -171,7 +238,7 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
             {[
               { label: 'Margen actual',   value: `${fmt(client.actualMargin)}%` },
               { label: 'Mix Power',       value: null, custom: <MixPowerBar value={client.mixPower} /> },
-              { label: 'Gap vs benchmark', value: `${fmt(client.gap)} pp`, color: client.gap > 0 ? D.red : D.green },
+              { label: 'Gap vs benchmark', value: client.gap > 0 ? `+${fmt(client.gap)} pp` : `${fmt(client.gap)} pp`, color: client.gap > 0 ? D.red : D.green },
               { label: 'Oportunidad',     value: fmtEur(client.opportunityEuros) },
             ].map((m, i) => (
               <div key={i} style={{ backgroundColor: D.bg, borderRadius: '8px', padding: '16px' }}>
@@ -259,6 +326,80 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
               Mix excelente. Este cliente está por encima del benchmark en todas las familias clave.
             </div>
           )}
+
+          {/* Plan de acción */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+                Plan de acción
+              </p>
+              <button
+                onClick={addPlanRow}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: D.sec, fontFamily: 'Inter, sans-serif', background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                <Plus size={12} />
+                Añadir acción
+              </button>
+            </div>
+            <div style={{ border: `1px solid ${D.border}`, borderRadius: '8px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'Inter, sans-serif' }}>
+                <thead>
+                  <tr>
+                    {(['Acción', 'Responsable', 'Objetivo', 'Fecha'] as const).map(h => (
+                      <th key={h} style={{ ...th, fontSize: '10px', padding: '8px 10px' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: i < plan.length - 1 ? `1px solid ${D.border}` : 'none', backgroundColor: i % 2 === 0 ? D.white : D.bg }}>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          value={row.accion}
+                          onChange={e => updatePlanRow(i, 'accion', e.target.value)}
+                          placeholder="Acción..."
+                          style={planInputStyle}
+                          onFocus={e => (e.target.style.borderColor = D.dark)}
+                          onBlur={e  => (e.target.style.borderColor = D.border)}
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          value={row.responsable}
+                          onChange={e => updatePlanRow(i, 'responsable', e.target.value)}
+                          placeholder="Nombre..."
+                          style={planInputStyle}
+                          onFocus={e => (e.target.style.borderColor = D.dark)}
+                          onBlur={e  => (e.target.style.borderColor = D.border)}
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          value={row.objetivo}
+                          onChange={e => updatePlanRow(i, 'objetivo', e.target.value)}
+                          placeholder="Ej: +5pp"
+                          style={planInputStyle}
+                          onFocus={e => (e.target.style.borderColor = D.dark)}
+                          onBlur={e  => (e.target.style.borderColor = D.border)}
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          type="date"
+                          value={row.fecha}
+                          onChange={e => updatePlanRow(i, 'fecha', e.target.value)}
+                          style={planInputStyle}
+                          onFocus={e => (e.target.style.borderColor = D.dark)}
+                          onBlur={e  => (e.target.style.borderColor = D.border)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

@@ -48,6 +48,7 @@ export default function OnboardingPage() {
         const rows: ClientRow[] = []; const errors: string[] = [];
         parsed.data.forEach((raw: unknown, i: number) => {
           const row = raw as Record<string, unknown>;
+          const ventasRaw = row['ventas'];
           const clientRow: ClientRow = {
             cliente: String(row['cliente'] ?? '').trim(), ciudad: String(row['ciudad'] ?? '').trim(),
             segmento: String(row['segmento'] ?? '').trim(),
@@ -55,6 +56,7 @@ export default function OnboardingPage() {
             F4: Number(row['F4'] ?? 0), F5: Number(row['F5'] ?? 0), F6: Number(row['F6'] ?? 0),
             F7: Number(row['F7'] ?? 0), F8: Number(row['F8'] ?? 0), F9: Number(row['F9'] ?? 0),
             F10: Number(row['F10'] ?? 0), volumen: Number(row['volumen'] ?? 0),
+            ...(ventasRaw != null && ventasRaw !== '' ? { ventas: Number(ventasRaw) } : {}),
           };
           const error = validateRow(clientRow, i);
           if (error) errors.push(error);

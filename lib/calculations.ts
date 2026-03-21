@@ -22,17 +22,18 @@ export function computeActualMargin(row: ClientRow, config: AppConfig): number {
   return margin;
 }
 
-export function getPriority(mixPower: number): ProcessedClient['priority'] {
-  if (mixPower < 0.65) return 'Muy Alta';
-  if (mixPower < 0.80) return 'Alta';
-  if (mixPower < 0.90) return 'Media';
+// BUG 2 fix: prioridad basada en oportunidad en euros
+export function getPriority(opportunityEuros: number): ProcessedClient['priority'] {
+  if (opportunityEuros > 200_000) return 'Muy Alta';
+  if (opportunityEuros > 100_000) return 'Alta';
+  if (opportunityEuros > 50_000)  return 'Media';
   return 'Mantener';
 }
 
-export function getPriorityColor(mixPower: number): ProcessedClient['priorityColor'] {
-  if (mixPower < 0.65) return 'red';
-  if (mixPower < 0.80) return 'orange';
-  if (mixPower < 0.90) return 'blue';
+export function getPriorityColor(opportunityEuros: number): ProcessedClient['priorityColor'] {
+  if (opportunityEuros > 200_000) return 'red';
+  if (opportunityEuros > 100_000) return 'orange';
+  if (opportunityEuros > 50_000)  return 'blue';
   return 'green';
 }
 
@@ -48,16 +49,24 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
 
     const actualMargin = computeActualMargin(row, config);
     const mixPower = benchmarkMargin > 0 ? actualMargin / benchmarkMargin : 0;
-    const gap = benchmarkMargin - actualMargin;
+
+    // BUG 1 fix: gap y oportunidad nunca negativos
+    const gap = Math.max(benchmarkMargin - actualMargin, 0);
     const potentialMargin6M = actualMargin + gap * 0.4;
     const opportunityEuros = row.volumen * (gap / 100) * PRICE_PER_TON;
-    const opportunityPtTon = row.volumen * gap;
+    const opportunityPtTon = row.volumen * (gap / 100);
+
+    // BUG 3: ventas = columna del CSV o volumen * precio por tonelada
+    const ventas = row.ventas != null && row.ventas > 0
+      ? row.ventas
+      : row.volumen * PRICE_PER_TON;
 
     return {
       cliente: row.cliente,
       ciudad: row.ciudad,
       segmento: row.segmento,
       volumen: row.volumen,
+      ventas,
       mix,
       actualMargin,
       benchmarkMargin,
@@ -66,8 +75,8 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
       potentialMargin6M,
       opportunityEuros,
       opportunityPtTon,
-      priority: getPriority(mixPower),
-      priorityColor: getPriorityColor(mixPower),
+      priority: getPriority(opportunityEuros),
+      priorityColor: getPriorityColor(opportunityEuros),
     };
   });
 }
