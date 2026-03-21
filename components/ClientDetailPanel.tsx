@@ -100,7 +100,8 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 107, 103);
-    doc.text(`${client.ciudad} · ${client.segmento} · ${client.volumen} t`, 14, 45);
+    const meta = [client.ciudad, client.region, client.segmento, client.comercial, `${client.volumen} t`].filter(Boolean).join(' · ');
+    doc.text(meta, 14, 45);
 
     const metrics = [
       { label: 'Margen actual', value: `${fmt(client.actualMargin)}%` },
@@ -212,7 +213,7 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
               {client.cliente}
             </h2>
             <p style={{ fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0 }}>
-              {client.ciudad} · {client.segmento} · {client.volumen.toLocaleString('es-ES')} t
+              {client.ciudad}{client.region ? ` · ${client.region}` : ''} · {client.segmento}{client.comercial ? ` · ${client.comercial}` : ''} · {client.volumen.toLocaleString('es-ES')} t
             </p>
           </div>
           <button onClick={onClose} style={{ color: D.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>

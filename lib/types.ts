@@ -14,6 +14,8 @@ export interface ClientRow {
   F10: number;
   volumen: number;
   ventas?: number; // ventas totales en €; si no viene en CSV se calcula como volumen * 800
+  region?: string;
+  comercial?: string;
 }
 
 export interface ProductFamily {
@@ -42,6 +44,8 @@ export interface SegmentBenchmark {
 export interface ProcessedClient {
   cliente: string;
   ciudad: string;
+  region: string;
+  comercial: string;
   segmento: string;
   volumen: number;
   ventas: number; // ventas totales en €

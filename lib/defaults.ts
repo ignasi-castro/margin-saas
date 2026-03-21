@@ -35,12 +35,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   ],
 };
 
-export const SAMPLE_CSV = `cliente,ciudad,segmento,F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,volumen
-García Distribuciones,Sevilla,Generalista,45,30,10,3,2,2,2,3,2,1,2000
-Materiales Roca,Madrid,Generalista,35,25,15,5,5,3,3,4,3,2,1500
-Construmat Norte,Bilbao,Generalista,28,20,12,8,9,6,5,6,4,2,1100
-Reformas del Norte,Bilbao,Especialista Rehabilitación,20,15,8,10,12,8,10,8,6,3,800
-Distribuciones Pérez,Valencia,Generalista,40,28,8,4,3,4,3,4,4,2,1200
-Morteros Levante,Alicante,Generalista,32,22,12,7,8,5,5,5,2,2,950
-Construcciones Mas,Barcelona,Especialista Rehabilitación,25,18,10,9,11,7,8,6,4,2,700
-Suministros Gil,Zaragoza,Obra Nueva,50,25,8,2,2,3,2,4,2,2,600`;
+export const SAMPLE_CSV = `cliente,ciudad,region,comercial,segmento,F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,volumen
+García Distribuciones,Sevilla,Sur,Pepe García,Generalista,45,30,10,3,2,2,2,3,2,1,2000
+Materiales Roca,Madrid,Centro,Ana Martínez,Generalista,35,25,15,5,5,3,3,4,3,2,1500
+Construmat Norte,Bilbao,Norte,Luis Rodríguez,Generalista,28,20,12,8,9,6,5,6,4,2,1100
+Reformas del Norte,Bilbao,Norte,Luis Rodríguez,Especialista Rehabilitación,20,15,8,10,12,8,10,8,6,3,800
+Distribuciones Pérez,Valencia,Levante,Ana Martínez,Generalista,40,28,8,4,3,4,3,4,4,2,1200
+Morteros Levante,Alicante,Levante,Ana Martínez,Generalista,32,22,12,7,8,5,5,5,2,2,950
+Construcciones Mas,Barcelona,Este,Pepe García,Especialista Rehabilitación,25,18,10,9,11,7,8,6,4,2,700
+Suministros Gil,Zaragoza,Norte,Luis Rodríguez,Obra Nueva,50,25,8,2,2,3,2,4,2,2,600`;

@@ -43,9 +43,11 @@ export default function DashboardPage() {
   const [company, setCompany]   = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [selected, setSelected] = useState<ProcessedClient | null>(null);
-  const [segFilter, setSegFilter] = useState('');
-  const [priFilter, setPriFilter] = useState('');
-  const [sortKey, setSortKey]   = useState<SortKey>('opportunityEuros');
+  const [segFilter, setSegFilter]     = useState('');
+  const [priFilter, setPriFilter]     = useState('');
+  const [regFilter, setRegFilter]     = useState('');
+  const [comFilter, setComFilter]     = useState('');
+  const [sortKey, setSortKey]         = useState<SortKey>('opportunityEuros');
   const [sortDir, setSortDir]   = useState<SortDir>('desc');
 
   useEffect(() => {
@@ -65,13 +67,17 @@ export default function DashboardPage() {
     router.refresh();
   };
 
-  const segments   = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))), [clients]);
-  const priorities = ['Muy Alta', 'Alta', 'Media', 'Mantener'];
+  const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
+  const regions     = useMemo(() => Array.from(new Set(clients.map(c => c.region))).filter(Boolean).sort(), [clients]);
+  const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
+  const priorities  = ['Muy Alta', 'Alta', 'Media', 'Mantener'];
 
   const filtered = useMemo(() => {
     let list = [...clients];
-    if (segFilter) list = list.filter(c => c.segmento === segFilter);
-    if (priFilter) list = list.filter(c => c.priority === priFilter);
+    if (segFilter) list = list.filter(c => c.segmento  === segFilter);
+    if (priFilter) list = list.filter(c => c.priority  === priFilter);
+    if (regFilter) list = list.filter(c => c.region    === regFilter);
+    if (comFilter) list = list.filter(c => c.comercial === comFilter);
     list.sort((a, b) => {
       const va = a[sortKey] as number | string;
       const vb = b[sortKey] as number | string;
@@ -79,7 +85,7 @@ export default function DashboardPage() {
       return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
     return list;
-  }, [clients, segFilter, priFilter, sortKey, sortDir]);
+  }, [clients, segFilter, priFilter, regFilter, comFilter, sortKey, sortDir]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -170,8 +176,10 @@ export default function DashboardPage() {
         {/* Filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {[
-            { value: segFilter, setter: setSegFilter, options: segments, placeholder: 'Todos los segmentos' },
-            { value: priFilter, setter: setPriFilter, options: priorities, placeholder: 'Todas las prioridades' },
+            { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
+            { value: priFilter, setter: setPriFilter, options: priorities,  placeholder: 'Todas las prioridades' },
+            { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
+            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
           ].map((f, i) => (
             <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
               style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
@@ -179,8 +187,8 @@ export default function DashboardPage() {
               {f.options.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           ))}
-          {(segFilter || priFilter) && (
-            <button onClick={() => { setSegFilter(''); setPriFilter(''); }}
+          {(segFilter || priFilter || regFilter || comFilter) && (
+            <button onClick={() => { setSegFilter(''); setPriFilter(''); setRegFilter(''); setComFilter(''); }}
               style={{ fontSize: '13px', color: D.muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', textDecoration: 'underline' }}>
               Limpiar
             </button>
@@ -197,7 +205,7 @@ export default function DashboardPage() {
               <thead>
                 <tr>
                   {([
-                    ['cliente', 'Cliente'], ['ciudad', 'Ciudad'], ['segmento', 'Segmento'],
+                    ['cliente', 'Cliente'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['comercial', 'Comercial'], ['segmento', 'Segmento'],
                     ['ventas', 'Ventas (€)'], ['volumen', 'Volumen (t)'], ['actualMargin', 'Margen actual'],
                     [null, 'Mix Power'],
                     ['gap', 'Gap (pp)'], ['potentialMargin6M', 'Margen 6M'],
@@ -227,6 +235,8 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', color: D.sec }}>{c.ciudad}</td>
+                    <td style={{ padding: '14px 16px', color: D.sec }}>{c.region || '—'}</td>
+                    <td style={{ padding: '14px 16px', color: D.sec }}>{c.comercial || '—'}</td>
                     <td style={{ padding: '14px 16px', color: D.sec }}>{c.segmento}</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{fmtVentas(c.ventas)}</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums' }}>{c.volumen.toLocaleString('es-ES')}</td>

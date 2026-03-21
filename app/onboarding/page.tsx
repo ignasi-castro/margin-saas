@@ -52,6 +52,8 @@ export default function OnboardingPage() {
           const clientRow: ClientRow = {
             cliente: String(row['cliente'] ?? '').trim(), ciudad: String(row['ciudad'] ?? '').trim(),
             segmento: String(row['segmento'] ?? '').trim(),
+            region: String(row['region'] ?? '').trim() || undefined,
+            comercial: String(row['comercial'] ?? '').trim() || undefined,
             F1: Number(row['F1'] ?? 0), F2: Number(row['F2'] ?? 0), F3: Number(row['F3'] ?? 0),
             F4: Number(row['F4'] ?? 0), F5: Number(row['F5'] ?? 0), F6: Number(row['F6'] ?? 0),
             F7: Number(row['F7'] ?? 0), F8: Number(row['F8'] ?? 0), F9: Number(row['F9'] ?? 0),

@@ -64,6 +64,8 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
     return {
       cliente: row.cliente,
       ciudad: row.ciudad,
+      region: row.region ?? '',
+      comercial: row.comercial ?? '',
       segmento: row.segmento,
       volumen: row.volumen,
       ventas,
