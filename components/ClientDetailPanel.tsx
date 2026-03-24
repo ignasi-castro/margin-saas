@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
 import PriorityBadge from './PriorityBadge';
 import MixPowerBar from './MixPowerBar';
+import FamilyRecommendations, { getTopFamilies } from './FamilyRecommendations';
 import { X, Download, Plus } from 'lucide-react';
 
 interface Props {
@@ -152,10 +153,29 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
       doc.text(`${i + 1}. ${f.name}: actual ${fmt(f.actual)}% vs benchmark ${fmt(f.benchmark)}% (gap ${fmt(f.gap)} pp)`, 17, y);
     });
 
+    // Familias prioritarias (top 2 más infradesarrolladas)
+    const topFamilies = getTopFamilies(client, config, 2);
+    let fpY = ry + top3.length * 7 + 16;
+    if (topFamilies.length > 0) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
+      doc.text('Familias prioritarias', 14, fpY);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      topFamilies.forEach((f, i) => {
+        const y = fpY + 7 + i * 8;
+        doc.setFillColor(255, 251, 235); doc.roundedRect(14, y - 4, 182, 7, 1, 1, 'F');
+        doc.setTextColor(60, 60, 60);
+        doc.text(
+          `${i + 1}. ${f.name}: ${fmt(f.actual)}% → ${fmt(f.benchmark)}% (${fmt(f.gap)} pp) · ${fmtEur(f.opp)} recuperables`,
+          17, y
+        );
+      });
+      fpY = fpY + topFamilies.length * 8 + 12;
+    }
+
     // Plan de acción
     const filledRows = plan.filter(r => r.accion || r.responsable || r.objetivo || r.fecha);
     if (filledRows.length > 0) {
-      const py = ry + top3.length * 7 + 20;
+      const py = fpY;
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 26, 24);
       doc.text('Plan de acción', 14, py);
       const pcols = [14, 70, 120, 155];
@@ -330,6 +350,9 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
 
           {/* Plan de acción */}
           <div>
+            {/* Familias recomendadas */}
+            <FamilyRecommendations client={client} config={config} />
+
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
               <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>
                 Plan de acción

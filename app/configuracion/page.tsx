@@ -172,6 +172,45 @@ export default function ConfigPage() {
           </div>
         </div>
 
+        {/* Parámetros del modelo */}
+        <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ padding: '24px 28px 20px', borderBottom: `1px solid ${D.border}` }}>
+            <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 600, color: D.dark, margin: '0 0 4px 0' }}>
+              Parámetros del modelo
+            </h2>
+            <p style={{ fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+              Ajusta los parámetros que afectan a los cálculos de oportunidad y proyecciones.
+            </p>
+          </div>
+          <div style={{ padding: '24px 28px' }}>
+            <div style={{ maxWidth: '480px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif' }}>
+                  Factor de captura a 6 meses
+                </label>
+                <span style={{ fontSize: '20px', fontFamily: '"Instrument Serif", Georgia, serif', color: D.dark, fontWeight: 400 }}>
+                  {Math.round((config.captureRate ?? 0.40) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={10} max={100} step={5}
+                value={Math.round((config.captureRate ?? 0.40) * 100)}
+                onChange={e => setConfig(prev => ({ ...prev, captureRate: Number(e.target.value) / 100 }))}
+                style={{ width: '100%', accentColor: D.dark, cursor: 'pointer', marginBottom: '10px' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>10% — conservador</span>
+                <span style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>100% — máximo</span>
+              </div>
+              <p style={{ fontSize: '12px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0, lineHeight: 1.6, backgroundColor: D.bg, borderRadius: '6px', padding: '10px 14px' }}>
+                Porcentaje del gap de margen que el equipo comercial se compromete a recuperar en 6 meses.
+                Un <strong style={{ color: D.dark }}>35%</strong> es conservador, un <strong style={{ color: D.dark }}>60%</strong> es ambicioso.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Families card */}
         <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '16px' }}>
           <div style={{ padding: '24px 28px 20px', borderBottom: `1px solid ${D.border}` }}>

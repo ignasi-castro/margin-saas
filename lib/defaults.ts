@@ -1,6 +1,7 @@
 import { AppConfig } from './types';
 
 export const DEFAULT_CONFIG: AppConfig = {
+  captureRate: 0.40,
   families: [
     { id: 'F1', name: 'Colas básicas', type: 'Volumen', margin: 10 },
     { id: 'F2', name: 'Enfoscados', type: 'Volumen', margin: 12 },

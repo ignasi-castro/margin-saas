@@ -52,7 +52,9 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
 
     // BUG 1 fix: gap y oportunidad nunca negativos
     const gap = Math.max(benchmarkMargin - actualMargin, 0);
-    const potentialMargin6M = actualMargin + gap * 0.4;
+    const captureRate = config.captureRate ?? 0.40;
+    const potentialMargin6M = actualMargin + gap * captureRate;
+    // opportunityEuros: gap TOTAL sin captureRate para priorización correcta
     const opportunityEuros = row.volumen * (gap / 100) * PRICE_PER_TON;
     const opportunityPtTon = row.volumen * (gap / 100);
 

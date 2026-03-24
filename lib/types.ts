@@ -64,4 +64,5 @@ export interface ProcessedClient {
 export interface AppConfig {
   families: ProductFamily[];
   segments: SegmentBenchmark[];
+  captureRate: number; // 0.0–1.0, porcentaje del gap que se compromete recuperar en 6M
 }

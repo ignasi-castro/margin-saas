@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { ProcessedClient } from '@/lib/types';
-import { loadProcessedClients } from '@/lib/store';
+import { ProcessedClient, AppConfig } from '@/lib/types';
+import { loadProcessedClients, loadConfig } from '@/lib/store';
 import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
 import DashboardNav from '@/components/DashboardNav';
+import FamilyRecommendations from '@/components/FamilyRecommendations';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC' };
 
@@ -44,7 +45,7 @@ function fmtEur(n: number) {
 }
 
 // Card de plan por cliente — componente propio para gestionar su estado independiente
-function ClientPlanCard({ client }: { client: ProcessedClient }) {
+function ClientPlanCard({ client, config }: { client: ProcessedClient; config: AppConfig }) {
   const [plan, setPlan] = useState<ActionRow[]>(() => loadPlan(client.cliente));
 
   const updateRow = (idx: number, field: keyof ActionRow, value: string) => {
@@ -110,6 +111,7 @@ function ClientPlanCard({ client }: { client: ProcessedClient }) {
 
       {/* Plan table */}
       <div style={{ padding: '20px 24px' }}>
+        <FamilyRecommendations client={client} config={config} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>
             Plan de acción
@@ -192,6 +194,7 @@ function ClientPlanCard({ client }: { client: ProcessedClient }) {
 export default function PlanPage() {
   const router = useRouter();
   const [clients, setClients] = useState<ProcessedClient[]>([]);
+  const [config, setConfig] = useState<AppConfig | null>(null);
 
   useEffect(() => {
     const loaded = loadProcessedClients();
@@ -200,9 +203,10 @@ export default function PlanPage() {
       .filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta')
       .sort((a, b) => b.opportunityEuros - a.opportunityEuros);
     setClients(priority);
+    setConfig(loadConfig());
   }, [router]);
 
-  if (clients.length === 0) {
+  if (clients.length === 0 || !config) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', flexDirection: 'column' }}>
         <DashboardNav />
@@ -234,7 +238,7 @@ export default function PlanPage() {
         {/* Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {clients.map(c => (
-            <ClientPlanCard key={c.cliente} client={c} />
+            <ClientPlanCard key={c.cliente} client={c} config={config} />
           ))}
         </div>
 
