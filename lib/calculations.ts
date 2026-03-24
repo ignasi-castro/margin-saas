@@ -57,7 +57,7 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
     // opportunityEuros: usa ventas reales si están disponibles, sino volumen × 800€/t
     const ventasReales = row.ventas != null && row.ventas > 0;
     const ventasBase   = ventasReales ? row.ventas! : row.volumen * PRICE_PER_TON;
-    const opportunityEuros = ventasBase * (gap / 100);
+    const opportunityEuros = ventasBase * (gap * captureRate) / 100;
     const opportunityPtTon = row.volumen * (gap / 100);
 
     // ventas totales para mostrar en tabla
