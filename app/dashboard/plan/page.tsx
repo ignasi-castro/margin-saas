@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
@@ -195,6 +195,9 @@ export default function PlanPage() {
   const router = useRouter();
   const [clients, setClients] = useState<ProcessedClient[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [segFilter, setSegFilter] = useState('');
+  const [regFilter, setRegFilter] = useState('');
+  const [comFilter, setComFilter] = useState('');
 
   useEffect(() => {
     const loaded = loadProcessedClients();
@@ -205,6 +208,18 @@ export default function PlanPage() {
     setClients(priority);
     setConfig(loadConfig());
   }, [router]);
+
+  const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
+  const regions     = useMemo(() => Array.from(new Set(clients.map(c => c.region))).filter(Boolean).sort(), [clients]);
+  const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
+
+  const filtered = useMemo(() => {
+    let list = [...clients];
+    if (segFilter) list = list.filter(c => c.segmento  === segFilter);
+    if (regFilter) list = list.filter(c => c.region    === regFilter);
+    if (comFilter) list = list.filter(c => c.comercial === comFilter);
+    return list;
+  }, [clients, segFilter, regFilter, comFilter]);
 
   if (clients.length === 0 || !config) {
     return (
@@ -226,7 +241,7 @@ export default function PlanPage() {
       <main style={{ flex: 1, padding: '40px 48px', maxWidth: '1100px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
 
         {/* Title */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '32px', fontWeight: 400, color: D.dark, margin: '0 0 4px 0', lineHeight: 1.1 }}>
             Plan de acción
           </h1>
@@ -235,9 +250,33 @@ export default function PlanPage() {
           </p>
         </div>
 
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          {[
+            { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
+            { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
+            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
+          ].map((f, i) => (
+            <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
+              style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
+              <option value="">{f.placeholder}</option>
+              {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {(segFilter || regFilter || comFilter) && (
+            <button onClick={() => { setSegFilter(''); setRegFilter(''); setComFilter(''); }}
+              style={{ fontSize: '13px', color: D.muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', textDecoration: 'underline' }}>
+              Limpiar
+            </button>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>
+            {filtered.length} clientes
+          </span>
+        </div>
+
         {/* Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {clients.map(c => (
+          {filtered.map(c => (
             <ClientPlanCard key={c.cliente} client={c} config={config} />
           ))}
         </div>

@@ -62,6 +62,9 @@ export default function DashboardOverview() {
   const [clients, setClients] = useState<ProcessedClient[]>([]);
   const [config,  setConfig]  = useState<AppConfig | null>(null);
   const [company, setCompany] = useState('');
+  const [segFilter, setSegFilter] = useState('');
+  const [regFilter, setRegFilter] = useState('');
+  const [comFilter, setComFilter] = useState('');
 
   useEffect(() => {
     const loaded = loadProcessedClients();
@@ -71,10 +74,22 @@ export default function DashboardOverview() {
     setConfig(loadConfig());
   }, [router]);
 
-  const avgMargin      = clients.length ? clients.reduce((s, c) => s + c.actualMargin, 0) / clients.length : 0;
-  const totalOpportunity = clients.reduce((s, c) => s + c.opportunityEuros, 0);
-  const avgMixPower    = clients.length ? clients.reduce((s, c) => s + c.mixPower, 0) / clients.length : 0;
-  const urgentCount    = clients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
+  const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
+  const regions     = useMemo(() => Array.from(new Set(clients.map(c => c.region))).filter(Boolean).sort(), [clients]);
+  const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
+
+  const filtered = useMemo(() => {
+    let list = [...clients];
+    if (segFilter) list = list.filter(c => c.segmento  === segFilter);
+    if (regFilter) list = list.filter(c => c.region    === regFilter);
+    if (comFilter) list = list.filter(c => c.comercial === comFilter);
+    return list;
+  }, [clients, segFilter, regFilter, comFilter]);
+
+  const avgMargin        = filtered.length ? filtered.reduce((s, c) => s + c.actualMargin, 0) / filtered.length : 0;
+  const totalOpportunity = filtered.reduce((s, c) => s + c.opportunityEuros, 0);
+  const avgMixPower      = filtered.length ? filtered.reduce((s, c) => s + c.mixPower, 0) / filtered.length : 0;
+  const urgentCount      = filtered.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
 
   const now      = new Date();
   const subtitle = `${company || 'Tu cartera'} · ${now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
@@ -82,7 +97,7 @@ export default function DashboardOverview() {
   // Agrupar clientes por segmento para el scatter chart
   const scatterGroups = useMemo(() => {
     const map = new Map<string, BubblePoint[]>();
-    for (const c of clients) {
+    for (const c of filtered) {
       if (!map.has(c.segmento)) map.set(c.segmento, []);
       map.get(c.segmento)!.push({
         volumen: c.volumen,
@@ -94,7 +109,7 @@ export default function DashboardOverview() {
       });
     }
     return Array.from(map.entries());
-  }, [clients]);
+  }, [filtered]);
 
   // Líneas de referencia por segmento (benchmark margins únicos)
   const benchmarkLines = useMemo(() => {
@@ -107,8 +122,8 @@ export default function DashboardOverview() {
 
   // Top 5 por oportunidad
   const top5 = useMemo(() =>
-    [...clients].sort((a, b) => b.opportunityEuros - a.opportunityEuros).slice(0, 5),
-    [clients]
+    [...filtered].sort((a, b) => b.opportunityEuros - a.opportunityEuros).slice(0, 5),
+    [filtered]
   );
 
   if (clients.length === 0) {
@@ -133,6 +148,30 @@ export default function DashboardOverview() {
           <p style={{ fontSize: '14px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0, textTransform: 'capitalize' }}>
             {subtitle}
           </p>
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          {[
+            { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
+            { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
+            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
+          ].map((f, i) => (
+            <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
+              style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
+              <option value="">{f.placeholder}</option>
+              {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {(segFilter || regFilter || comFilter) && (
+            <button onClick={() => { setSegFilter(''); setRegFilter(''); setComFilter(''); }}
+              style={{ fontSize: '13px', color: D.muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', textDecoration: 'underline' }}>
+              Limpiar
+            </button>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>
+            {filtered.length} clientes
+          </span>
         </div>
 
         {/* Metric cards */}
@@ -193,9 +232,9 @@ export default function DashboardOverview() {
                     name={seg}
                     data={data}
                     fill={segColor(seg, idx)}
-                    fillOpacity={0.75}
+                    fillOpacity={0}
                     stroke={segColor(seg, idx)}
-                    strokeWidth={1}
+                    strokeWidth={2}
                   />
                 ))}
               </ScatterChart>
