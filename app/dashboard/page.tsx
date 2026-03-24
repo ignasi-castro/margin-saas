@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { ProcessedClient, AppConfig } from '@/lib/types';
 import { loadProcessedClients, loadCompany, loadConfig } from '@/lib/store';
+import { loadSnapshots, loadSnapshotClientes, SnapshotMeta } from '@/lib/snapshots';
 import MetricCard from '@/components/MetricCard';
 import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
@@ -65,6 +66,8 @@ export default function DashboardOverview() {
   const [segFilter, setSegFilter] = useState('');
   const [regFilter, setRegFilter] = useState('');
   const [comFilter, setComFilter] = useState('');
+  const [snapshots,   setSnapshots]   = useState<SnapshotMeta[]>([]);
+  const [prevClients, setPrevClients] = useState<ProcessedClient[]>([]);
 
   useEffect(() => {
     const loaded = loadProcessedClients();
@@ -72,6 +75,15 @@ export default function DashboardOverview() {
     setClients(loaded);
     setCompany(loadCompany());
     setConfig(loadConfig());
+
+    // Cargar snapshots para la sección de evolución
+    loadSnapshots().then(snaps => {
+      setSnapshots(snaps);
+      if (snaps.length >= 2) {
+        // snaps[0] = más reciente → es el "anterior" vs datos actuales en memoria
+        loadSnapshotClientes(snaps[0].id).then(setPrevClients).catch(() => {});
+      }
+    }).catch(() => {});
   }, [router]);
 
   const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
@@ -181,6 +193,66 @@ export default function DashboardOverview() {
           <MetricCard label="Mix Power medio"          value={fmt(avgMixPower, 2)}        subtitle="vs. benchmark de segmento" />
           <MetricCard label="Clientes prioritarios"    value={String(urgentCount)}        subtitle="Prioridad Muy Alta o Alta" />
         </div>
+
+        {/* Evolución vs snapshot anterior */}
+        {snapshots.length >= 2 && prevClients.length > 0 && (() => {
+          const prevAvgMargin      = prevClients.reduce((s, c) => s + c.actualMargin, 0) / prevClients.length;
+          const prevTotalOpp       = prevClients.reduce((s, c) => s + c.opportunityEuros, 0);
+          const prevAvgMixPower    = prevClients.reduce((s, c) => s + c.mixPower, 0) / prevClients.length;
+          const prevUrgent         = prevClients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
+          const snapshotName       = snapshots[0].nombre;
+
+          const evo = [
+            { label: 'Margen medio',        prev: `${fmt(prevAvgMargin)}%`,     curr: `${fmt(avgMargin)}%`,         delta: avgMargin - prevAvgMargin,           betterHigh: true  },
+            { label: 'Oportunidad total',   prev: fmtEur(prevTotalOpp),         curr: fmtEur(totalOpportunity),     delta: totalOpportunity - prevTotalOpp,     betterHigh: false },
+            { label: 'Mix Power medio',     prev: fmt(prevAvgMixPower, 2),      curr: fmt(avgMixPower, 2),          delta: avgMixPower - prevAvgMixPower,       betterHigh: true  },
+            { label: 'Clientes prioritarios', prev: String(prevUrgent),         curr: String(urgentCount),          delta: urgentCount - prevUrgent,            betterHigh: false },
+          ];
+
+          return (
+            <div style={{ marginBottom: '32px' }}>
+              <p style={{ fontSize: '11px', fontFamily: 'Inter, sans-serif', color: D.muted, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px 0' }}>
+                Evolución vs snapshot anterior
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                {evo.map(m => {
+                  const improved = m.betterHigh ? m.delta > 0 : m.delta < 0;
+                  const neutral  = Math.abs(m.delta) < 0.005;
+                  const deltaColor = neutral ? D.muted : improved ? '#2D7A4F' : '#C94040';
+                  const sign = m.delta > 0 ? '+' : '';
+                  const deltaLabel = m.label === 'Clientes prioritarios'
+                    ? `${sign}${Math.round(m.delta)}`
+                    : m.label === 'Oportunidad total'
+                      ? `${sign}${fmtEur(m.delta)}`
+                      : m.label === 'Mix Power medio'
+                        ? `${sign}${fmt(m.delta, 2)}`
+                        : `${sign}${fmt(m.delta)} pp`;
+
+                  return (
+                    <div key={m.label} style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', padding: '16px 20px' }}>
+                      <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}>
+                        {m.label}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>{m.prev}</span>
+                        <span style={{ fontSize: '11px', color: D.muted }}>→</span>
+                        <span style={{ fontSize: '15px', fontWeight: 600, color: D.dark, fontFamily: 'Inter, sans-serif' }}>{m.curr}</span>
+                      </div>
+                      {!neutral && (
+                        <p style={{ fontSize: '12px', fontWeight: 600, color: deltaColor, fontFamily: 'Inter, sans-serif', margin: '4px 0 0 0' }}>
+                          {deltaLabel}
+                        </p>
+                      )}
+                      <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '4px 0 0 0' }}>
+                        vs {snapshotName}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Bubble chart + Top 5 — grid 3+2 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', alignItems: 'start', marginBottom: '32px' }}>

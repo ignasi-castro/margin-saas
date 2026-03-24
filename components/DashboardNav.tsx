@@ -20,6 +20,7 @@ function Logo() {
 }
 
 const TABS = [
+  { label: 'Inicio',         href: '/dashboard/inicio' },
   { label: 'Resumen',        href: '/dashboard' },
   { label: 'Clientes',       href: '/dashboard/tabla' },
   { label: 'Histórico',      href: '/dashboard/historico' },
