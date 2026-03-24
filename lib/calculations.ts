@@ -54,14 +54,14 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
     const gap = Math.max(benchmarkMargin - actualMargin, 0);
     const captureRate = config.captureRate ?? 0.40;
     const potentialMargin6M = actualMargin + gap * captureRate;
-    // opportunityEuros: gap TOTAL sin captureRate para priorización correcta
-    const opportunityEuros = row.volumen * (gap / 100) * PRICE_PER_TON;
+    // opportunityEuros: usa ventas reales si están disponibles, sino volumen × 800€/t
+    const ventasReales = row.ventas != null && row.ventas > 0;
+    const ventasBase   = ventasReales ? row.ventas! : row.volumen * PRICE_PER_TON;
+    const opportunityEuros = ventasBase * (gap / 100);
     const opportunityPtTon = row.volumen * (gap / 100);
 
-    // BUG 3: ventas = columna del CSV o volumen * precio por tonelada
-    const ventas = row.ventas != null && row.ventas > 0
-      ? row.ventas
-      : row.volumen * PRICE_PER_TON;
+    // ventas totales para mostrar en tabla
+    const ventas = ventasBase;
 
     return {
       cliente: row.cliente,
@@ -79,6 +79,7 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
       potentialMargin6M,
       opportunityEuros,
       opportunityPtTon,
+      ventasReales,
       priority: getPriority(opportunityEuros),
       priorityColor: getPriorityColor(opportunityEuros),
     };

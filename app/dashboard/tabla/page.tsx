@@ -184,7 +184,7 @@ export default function TablaPage() {
                       {c.gap > 0 ? `+${fmt(c.gap)}` : fmt(c.gap)}
                     </td>
                     <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.potentialMargin6M)}%</td>
-                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{fmtEur(c.opportunityEuros)}</td>
+                    <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }} title={c.ventasReales ? 'Basado en ventas reales del CSV' : 'Estimado: volumen × 800€/t'}>{fmtEur(c.opportunityEuros)}</td>
                     <td style={{ padding: '14px 16px' }}><PriorityBadge priority={c.priority} color={c.priorityColor} /></td>
                   </tr>
                 ))}

@@ -57,6 +57,7 @@ export interface ProcessedClient {
   potentialMargin6M: number;
   opportunityEuros: number; // siempre >= 0
   opportunityPtTon: number;
+  ventasReales: boolean; // true si opportunityEuros usa ventas reales del CSV
   priority: 'Muy Alta' | 'Alta' | 'Media' | 'Mantener';
   priorityColor: 'red' | 'orange' | 'blue' | 'green';
 }
