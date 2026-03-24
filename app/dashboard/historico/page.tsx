@@ -15,6 +15,13 @@ function fmt(n: number, d = 1) { return n.toFixed(d); }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 }
+function fmtSnapshotLabel(s: SnapshotMeta): string {
+  const d    = new Date(s.fecha + 'T12:00:00');
+  const mes  = d.toLocaleDateString('es-ES', { month: 'long' });
+  const año  = d.getFullYear();
+  const mesC = mes.charAt(0).toUpperCase() + mes.slice(1);
+  return `${mesC} ${año} — ${s.nombre} (${s.count} clientes)`;
+}
 
 // ---- Metric comparison card ----
 interface CompareCardProps {
@@ -245,7 +252,7 @@ export default function HistoricoPage() {
                     >
                       <option value="">Seleccionar período base...</option>
                       {snapshots.map(s => (
-                        <option key={s.id} value={s.id}>{s.nombre} ({fmtDate(s.fecha)})</option>
+                        <option key={s.id} value={s.id}>{fmtSnapshotLabel(s)}</option>
                       ))}
                     </select>
                   </div>
@@ -258,7 +265,7 @@ export default function HistoricoPage() {
                     >
                       <option value="">Seleccionar período a comparar...</option>
                       {snapshots.filter(s => s.id !== baseId).map(s => (
-                        <option key={s.id} value={s.id}>{s.nombre} ({fmtDate(s.fecha)})</option>
+                        <option key={s.id} value={s.id}>{fmtSnapshotLabel(s)}</option>
                       ))}
                     </select>
                   </div>
