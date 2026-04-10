@@ -11,14 +11,22 @@ const STORAGE_KEY_COMPANY = 'mixpower_company';
 
 export function saveConfig(config: AppConfig): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
+  try {
+    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
+  } catch {}
 }
 
 export function loadConfig(): AppConfig {
   if (typeof window === 'undefined') return DEFAULT_CONFIG;
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
-    if (raw) return JSON.parse(raw) as AppConfig;
+    if (raw) {
+      const parsed = JSON.parse(raw) as AppConfig;
+      // Validación mínima de estructura
+      if (parsed && Array.isArray(parsed.families) && Array.isArray(parsed.segments)) {
+        return parsed;
+      }
+    }
   } catch {}
   return DEFAULT_CONFIG;
 }
@@ -39,33 +47,49 @@ export function loadConfig(): AppConfig {
 */
 
 export async function saveConfigToSupabase(config: AppConfig): Promise<void> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase
-    .from('user_configs')
-    .upsert(
-      { user_id: user.id, config, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
+  try {
+    const supabase = createClient();
+    const result = await supabase.auth.getUser();
+    const user = result?.data?.user;
+    if (!user) return;
+    await supabase
+      .from('user_configs')
+      .upsert(
+        { user_id: user.id, config, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+  } catch {}
 }
 
 export async function loadConfigFromSupabase(): Promise<AppConfig | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase
-    .from('user_configs')
-    .select('config')
-    .eq('user_id', user.id)
-    .single();
-  return (data?.config as AppConfig) ?? null;
+  try {
+    const supabase = createClient();
+    const result = await supabase.auth.getUser();
+    const user = result?.data?.user;
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('user_configs')
+      .select('config')
+      .eq('user_id', user.id)
+      .single();
+    if (error || !data) return null;
+    const cfg = data.config as AppConfig;
+    // Validación mínima antes de devolver
+    if (cfg && Array.isArray(cfg.families) && Array.isArray(cfg.segments)) {
+      return cfg;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function saveRawClients(rows: ClientRow[], company: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(rows));
-  localStorage.setItem(STORAGE_KEY_COMPANY, company);
+  try {
+    localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(rows));
+    localStorage.setItem(STORAGE_KEY_COMPANY, company);
+  } catch {}
 }
 
 export function loadRawClients(): ClientRow[] {
@@ -79,18 +103,28 @@ export function loadRawClients(): ClientRow[] {
 
 export function loadCompany(): string {
   if (typeof window === 'undefined') return '';
-  return localStorage.getItem(STORAGE_KEY_COMPANY) ?? '';
+  try {
+    return localStorage.getItem(STORAGE_KEY_COMPANY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export function loadProcessedClients(): ProcessedClient[] {
-  const rows = loadRawClients();
-  const config = loadConfig();
-  if (rows.length === 0) return [];
-  return processClients(rows, config);
+  try {
+    const rows = loadRawClients();
+    const config = loadConfig();
+    if (rows.length === 0) return [];
+    return processClients(rows, config);
+  } catch {
+    return [];
+  }
 }
 
 export function clearData(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(STORAGE_KEY_CLIENTS);
-  localStorage.removeItem(STORAGE_KEY_COMPANY);
+  try {
+    localStorage.removeItem(STORAGE_KEY_CLIENTS);
+    localStorage.removeItem(STORAGE_KEY_COMPANY);
+  } catch {}
 }
