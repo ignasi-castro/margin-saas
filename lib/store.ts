@@ -3,6 +3,7 @@
 import { ProcessedClient, AppConfig, ClientRow } from './types';
 import { DEFAULT_CONFIG } from './defaults';
 import { processClients } from './calculations';
+import { createClient } from './supabase';
 
 const STORAGE_KEY_CLIENTS = 'mixpower_clients_raw';
 const STORAGE_KEY_CONFIG = 'mixpower_config';
@@ -20,6 +21,45 @@ export function loadConfig(): AppConfig {
     if (raw) return JSON.parse(raw) as AppConfig;
   } catch {}
   return DEFAULT_CONFIG;
+}
+
+/*
+  SQL para crear la tabla en Supabase:
+
+  CREATE TABLE user_configs (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references auth.users(id) on delete cascade,
+    config jsonb not null,
+    updated_at timestamp default now(),
+    unique(user_id)
+  );
+  ALTER TABLE user_configs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Users manage own config" ON user_configs
+    FOR ALL USING (auth.uid() = user_id);
+*/
+
+export async function saveConfigToSupabase(config: AppConfig): Promise<void> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase
+    .from('user_configs')
+    .upsert(
+      { user_id: user.id, config, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+}
+
+export async function loadConfigFromSupabase(): Promise<AppConfig | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from('user_configs')
+    .select('config')
+    .eq('user_id', user.id)
+    .single();
+  return (data?.config as AppConfig) ?? null;
 }
 
 export function saveRawClients(rows: ClientRow[], company: string): void {

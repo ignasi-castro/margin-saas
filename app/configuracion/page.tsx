@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Save, RotateCcw, Plus, Trash2, Upload, Settings, LogOut } from 'lucide-react';
+import { Save, RotateCcw, Plus, Trash2, Upload, Settings, LogOut, Download, Share2 } from 'lucide-react';
 import { AppConfig, SegmentBenchmark } from '@/lib/types';
-import { loadConfig, saveConfig } from '@/lib/store';
+import { loadConfig, saveConfig, saveConfigToSupabase, loadConfigFromSupabase } from '@/lib/store';
 import { DEFAULT_CONFIG } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
 
@@ -25,18 +25,56 @@ function generateId(name: string) {
   return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now();
 }
 
+function isValidConfig(obj: unknown): obj is AppConfig {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const c = obj as Record<string, unknown>;
+  return Array.isArray(c.families) && Array.isArray(c.segments) && typeof c.captureRate === 'number';
+}
+
 export default function ConfigPage() {
   const router = useRouter();
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
   const [newSegmentName, setNewSegmentName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setConfig(loadConfig());
+    // Intentar cargar desde Supabase primero; si no, usar localStorage
+    loadConfigFromSupabase()
+      .then(supabaseConfig => {
+        if (supabaseConfig) {
+          setConfig(supabaseConfig);
+          saveConfig(supabaseConfig); // sincronizar con localStorage
+        } else {
+          setConfig(loadConfig());
+        }
+      })
+      .catch(() => {
+        setConfig(loadConfig());
+      });
+
     createClient().auth.getUser().then(({ data }) => {
       if (data.user?.email) setUserEmail(data.user.email);
     });
+
+    // Comprobar si hay configuración compartida en la URL
+    const params = new URLSearchParams(window.location.search);
+    const sharedConfig = params.get('config');
+    if (sharedConfig) {
+      try {
+        const decoded = JSON.parse(atob(sharedConfig));
+        if (isValidConfig(decoded)) {
+          if (confirm('Se ha detectado una configuración compartida. ¿Importarla? Se reemplazará la configuración actual.')) {
+            setConfig(decoded);
+          }
+          // Limpiar el parámetro de la URL sin recargar
+          const url = new URL(window.location.href);
+          url.searchParams.delete('config');
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch {}
+    }
   }, []);
 
   const handleSignOut = async () => {
@@ -45,16 +83,64 @@ export default function ConfigPage() {
     router.refresh();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     saveConfig(config);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    try {
+      await saveConfigToSupabase(config);
+    } catch {}
   };
 
   const handleReset = () => {
     if (confirm('¿Restaurar la configuración por defecto? Se perderán los cambios.')) {
       setConfig(DEFAULT_CONFIG);
       saveConfig(DEFAULT_CONFIG);
+    }
+  };
+
+  const handleExport = () => {
+    const date = new Date().toISOString().split('T')[0];
+    const json = JSON.stringify(config, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mixpower_config_${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target?.result as string);
+        if (!isValidConfig(parsed)) {
+          alert('El archivo no tiene el formato correcto de configuración MixPower.');
+          return;
+        }
+        if (confirm('¿Importar esta configuración? Se reemplazará la configuración actual.')) {
+          setConfig(parsed);
+        }
+      } catch {
+        alert('Error al leer el archivo JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleShare = async () => {
+    const encoded = btoa(JSON.stringify(config));
+    const url = `${window.location.origin}/configuracion?config=${encoded}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Link copiado al portapapeles.');
+    } catch {
+      prompt('Copia este link de configuración:', url);
     }
   };
 
@@ -111,6 +197,13 @@ export default function ConfigPage() {
     letterSpacing: '0.06em', margin: '0 0 4px 0',
   };
 
+  const secondaryBtnStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: '6px',
+    fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif',
+    background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px',
+    padding: '8px 14px', cursor: 'pointer',
+  };
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', flexDirection: 'column' }}>
 
@@ -154,10 +247,30 @@ export default function ConfigPage() {
               {' · '}Configuración
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {/* Input oculto para importar */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImport}
+            />
+            <button onClick={handleExport} style={secondaryBtnStyle} title="Descargar configuración como JSON">
+              <Download size={13} />
+              Exportar
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} style={secondaryBtnStyle} title="Importar configuración desde archivo JSON">
+              <Upload size={13} />
+              Importar
+            </button>
+            <button onClick={handleShare} style={secondaryBtnStyle} title="Copiar link con la configuración actual">
+              <Share2 size={13} />
+              Compartir link
+            </button>
             <button
               onClick={handleReset}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '8px 14px', cursor: 'pointer' }}
+              style={secondaryBtnStyle}
             >
               <RotateCcw size={13} />
               Restablecer

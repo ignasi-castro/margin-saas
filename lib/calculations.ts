@@ -38,9 +38,43 @@ export function getPriorityColor(opportunityEuros: number): ProcessedClient['pri
 }
 
 export function processClients(rows: ClientRow[], config: AppConfig): ProcessedClient[] {
+  // Pre-pass: calcular márgenes actuales para determinar benchmarks dinámicos
+  const rowMargins = rows.map(row => ({
+    normalizedSegmento: normalizeSegmentName(row.segmento),
+    margin: computeActualMargin(row, config),
+  }));
+
+  // Agrupar márgenes por segmento normalizado
+  const segmentMarginGroups = new Map<string, number[]>();
+  for (const { normalizedSegmento, margin } of rowMargins) {
+    if (!segmentMarginGroups.has(normalizedSegmento)) segmentMarginGroups.set(normalizedSegmento, []);
+    segmentMarginGroups.get(normalizedSegmento)!.push(margin);
+  }
+
+  // Calcular benchmark dinámico por segmento:
+  // Si >= 4 clientes: media del TOP 25% (los mejor desarrollados)
+  // Si < 4 clientes: usa benchmarkMargin de la configuración
+  const dynamicBenchmarks = new Map<string, { benchmark: number; topCount: number; source: 'dynamic' | 'config' }>();
+  Array.from(segmentMarginGroups.entries()).forEach(([normalizedSeg, margins]) => {
+    const segment = config.segments.find(s => normalizeSegmentName(s.name) === normalizedSeg);
+    const configBenchmark = segment?.benchmarkMargin ?? 18.5;
+    if (margins.length >= 4) {
+      const sorted = [...margins].sort((a, b) => b - a);
+      const topCount = Math.max(1, Math.floor(sorted.length * 0.25));
+      const top25 = sorted.slice(0, topCount);
+      const dynamicBenchmark = top25.reduce((sum, m) => sum + m, 0) / top25.length;
+      dynamicBenchmarks.set(normalizedSeg, { benchmark: dynamicBenchmark, topCount, source: 'dynamic' });
+    } else {
+      dynamicBenchmarks.set(normalizedSeg, { benchmark: configBenchmark, topCount: 0, source: 'config' });
+    }
+  });
+
   return rows.map(row => {
-    const segment = findSegment(row.segmento, config.segments);
-    const benchmarkMargin = segment?.benchmarkMargin ?? 18.5;
+    const normalizedSeg = normalizeSegmentName(row.segmento);
+    const dynBenchmark = dynamicBenchmarks.get(normalizedSeg);
+    const benchmarkMargin = dynBenchmark?.benchmark ?? (findSegment(row.segmento, config.segments)?.benchmarkMargin ?? 18.5);
+    const benchmarkSource: 'dynamic' | 'config' = dynBenchmark?.source ?? 'config';
+    const benchmarkTopCount = dynBenchmark?.topCount ?? 0;
 
     const mix: Record<string, number> = {};
     for (const f of config.families) {
@@ -74,6 +108,8 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
       mix,
       actualMargin,
       benchmarkMargin,
+      benchmarkSource,
+      benchmarkTopCount,
       mixPower,
       gap,
       potentialMargin6M,

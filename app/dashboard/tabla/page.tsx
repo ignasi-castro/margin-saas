@@ -49,6 +49,23 @@ export default function TablaPage() {
   const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
   const priorities  = ['Muy Alta', 'Alta', 'Media', 'Mantener'];
 
+  // Comerciales filtrados según la región seleccionada
+  const comercialesFiltrados = useMemo(() => {
+    if (!regFilter) return comerciales;
+    return Array.from(new Set(
+      clients
+        .filter(c => c.region === regFilter)
+        .map(c => c.comercial)
+    )).filter(Boolean).sort() as string[];
+  }, [clients, regFilter, comerciales]);
+
+  // Si el comercial seleccionado no existe en la nueva región, resetearlo
+  useEffect(() => {
+    if (comFilter && !comercialesFiltrados.includes(comFilter)) {
+      setComFilter('');
+    }
+  }, [comercialesFiltrados, comFilter]);
+
   const filtered = useMemo(() => {
     let list = [...clients];
     if (segFilter) list = list.filter(c => c.segmento  === segFilter);
@@ -117,7 +134,7 @@ export default function TablaPage() {
             { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
             { value: priFilter, setter: setPriFilter, options: priorities,  placeholder: 'Todas las prioridades' },
             { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
-            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
+            { value: comFilter, setter: setComFilter, options: comercialesFiltrados, placeholder: 'Todos los comerciales' },
           ].map((f, i) => (
             <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
               style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
@@ -183,7 +200,11 @@ export default function TablaPage() {
                     <td style={{ padding: '14px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: c.gap > 0 ? '#C94040' : '#2D7A4F' }}>
                       {c.gap > 0 ? `+${fmt(c.gap)}` : fmt(c.gap)}
                     </td>
-                    <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}>{fmt(c.potentialMargin6M)}%</td>
+                    <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}
+                      title={c.benchmarkSource === 'dynamic'
+                        ? `Benchmark calculado a partir de los ${c.benchmarkTopCount} mejores clientes de este segmento (${fmt(c.benchmarkMargin)}%)`
+                        : 'Benchmark de configuración (pocos clientes en segmento)'}
+                    >{fmt(c.potentialMargin6M)}%</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }} title={c.ventasReales ? 'Basado en ventas reales del CSV' : 'Estimado: volumen × 800€/t'}>{fmtEur(c.opportunityEuros)}</td>
                     <td style={{ padding: '14px 16px' }}><PriorityBadge priority={c.priority} color={c.priorityColor} /></td>
                   </tr>

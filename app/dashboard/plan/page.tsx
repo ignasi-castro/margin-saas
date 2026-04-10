@@ -213,6 +213,23 @@ export default function PlanPage() {
   const regions     = useMemo(() => Array.from(new Set(clients.map(c => c.region))).filter(Boolean).sort(), [clients]);
   const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
 
+  // Comerciales filtrados según la región seleccionada
+  const comercialesFiltrados = useMemo(() => {
+    if (!regFilter) return comerciales;
+    return Array.from(new Set(
+      clients
+        .filter(c => c.region === regFilter)
+        .map(c => c.comercial)
+    )).filter(Boolean).sort() as string[];
+  }, [clients, regFilter, comerciales]);
+
+  // Si el comercial seleccionado no existe en la nueva región, resetearlo
+  useEffect(() => {
+    if (comFilter && !comercialesFiltrados.includes(comFilter)) {
+      setComFilter('');
+    }
+  }, [comercialesFiltrados, comFilter]);
+
   const filtered = useMemo(() => {
     let list = [...clients];
     if (segFilter) list = list.filter(c => c.segmento  === segFilter);
@@ -255,7 +272,7 @@ export default function PlanPage() {
           {[
             { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
             { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
-            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
+            { value: comFilter, setter: setComFilter, options: comercialesFiltrados, placeholder: 'Todos los comerciales' },
           ].map((f, i) => (
             <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
               style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>

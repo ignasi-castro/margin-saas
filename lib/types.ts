@@ -52,6 +52,8 @@ export interface ProcessedClient {
   mix: Record<string, number>;
   actualMargin: number;
   benchmarkMargin: number;
+  benchmarkSource: 'dynamic' | 'config'; // origen del benchmark
+  benchmarkTopCount: number; // nº de clientes top usados en benchmark dinámico; 0 si viene de config
   mixPower: number;
   gap: number; // siempre >= 0
   potentialMargin6M: number;
