@@ -8,6 +8,7 @@ import { createClient } from './supabase';
 const STORAGE_KEY_CLIENTS = 'mixpower_clients_raw';
 const STORAGE_KEY_CONFIG = 'mixpower_config';
 const STORAGE_KEY_COMPANY = 'mixpower_company';
+const STORAGE_KEY_LAST_UPLOAD = 'mixpower_last_upload';
 
 export function saveConfig(config: AppConfig): void {
   if (typeof window === 'undefined') return;
@@ -89,7 +90,17 @@ export function saveRawClients(rows: ClientRow[], company: string): void {
   try {
     localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(rows));
     localStorage.setItem(STORAGE_KEY_COMPANY, company);
+    localStorage.setItem(STORAGE_KEY_LAST_UPLOAD, new Date().toISOString());
   } catch {}
+}
+
+export function loadLastUploadDate(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem(STORAGE_KEY_LAST_UPLOAD) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export function loadRawClients(): ClientRow[] {

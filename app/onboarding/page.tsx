@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { ClientRow } from '@/lib/types';
 import { validateRow } from '@/lib/calculations';
-import { saveRawClients, loadProcessedClients } from '@/lib/store';
+import { saveRawClients, loadRawClients, loadLastUploadDate, loadConfig, loadProcessedClients } from '@/lib/store';
 import { SAMPLE_CSV } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
 import { saveSnapshot } from '@/lib/snapshots';
@@ -34,11 +34,13 @@ interface ParsedResult { rows: ClientRow[]; errors: string[]; }
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [company, setCompany]       = useState('');
-  const [greeting, setGreeting]     = useState('');
-  const [dragActive, setDragActive] = useState(false);
-  const [result, setResult]         = useState<ParsedResult | null>(null);
-  const [fileName, setFileName]     = useState('');
+  const [company, setCompany]           = useState('');
+  const [greeting, setGreeting]         = useState('');
+  const [dragActive, setDragActive]     = useState(false);
+  const [result, setResult]             = useState<ParsedResult | null>(null);
+  const [fileName, setFileName]         = useState('');
+  const [existingCount, setExistingCount] = useState(0);
+  const [lastUploadDate, setLastUploadDate] = useState('');
 
   // Modal de guardar snapshot
   const [showModal, setShowModal]       = useState(false);
@@ -47,6 +49,12 @@ export default function OnboardingPage() {
   const [saveError, setSaveError]       = useState('');
 
   useEffect(() => {
+    // Comprobar si ya hay datos cargados
+    const existing = loadRawClients();
+    if (existing.length > 0) {
+      setExistingCount(existing.length);
+      setLastUploadDate(loadLastUploadDate());
+    }
     createClient().auth.getUser().then(({ data }) => {
       const name = data.user?.user_metadata?.company_name as string | undefined;
       if (name) { setGreeting(name); setCompany(name); }
@@ -55,6 +63,8 @@ export default function OnboardingPage() {
 
   const processFile = (file: File) => {
     setFileName(file.name);
+    const config = loadConfig();
+    const familyIds = config.families.map(f => f.id);
     Papa.parse(file, {
       header: true, skipEmptyLines: true, dynamicTyping: true,
       complete: (parsed) => {
@@ -73,7 +83,7 @@ export default function OnboardingPage() {
             F10: Number(row['F10'] ?? 0), volumen: Number(row['volumen'] ?? 0),
             ...(ventasRaw != null && ventasRaw !== '' ? { ventas: Number(ventasRaw) } : {}),
           };
-          const error = validateRow(clientRow, i);
+          const error = validateRow(clientRow, i, familyIds);
           if (error) errors.push(error);
           rows.push(clientRow);
         });
@@ -145,6 +155,23 @@ export default function OnboardingPage() {
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
         <div style={{ width: '100%', maxWidth: '600px' }}>
+
+          {/* Banner datos existentes */}
+          {existingCount > 0 && (
+            <div style={{ backgroundColor: '#EAF3DE', border: '1px solid #2D7A4F', borderRadius: '8px', padding: '14px 18px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <p style={{ fontSize: '13px', color: '#1A3D28', fontFamily: 'Inter, sans-serif', margin: 0, lineHeight: 1.5 }}>
+                Tienes <strong>{existingCount} clientes</strong> cargados
+                {lastUploadDate ? ` del ${new Date(lastUploadDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.
+                {' '}Sube un nuevo CSV para actualizar.
+              </p>
+              <a
+                href="/dashboard"
+                style={{ fontSize: '13px', fontWeight: 500, color: '#2D7A4F', fontFamily: 'Inter, sans-serif', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                Ver dashboard →
+              </a>
+            </div>
+          )}
 
           {/* Heading */}
           <div style={{ marginBottom: '32px' }}>

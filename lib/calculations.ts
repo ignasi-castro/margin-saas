@@ -122,9 +122,9 @@ export function processClients(rows: ClientRow[], config: AppConfig): ProcessedC
   });
 }
 
-export function validateRow(row: ClientRow, rowIndex: number): string | null {
-  const families = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10'];
-  const sum = families.reduce((acc, f) => acc + (Number(row[f as keyof ClientRow]) || 0), 0);
+export function validateRow(row: ClientRow, rowIndex: number, familyIds?: string[]): string | null {
+  const ids = familyIds ?? ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10'];
+  const sum = ids.reduce((acc, f) => acc + (Number(row[f as keyof ClientRow]) || 0), 0);
   if (Math.abs(sum - 100) > 0.5) {
     return `Fila ${rowIndex + 1} (${row.cliente}): los porcentajes suman ${sum.toFixed(1)}% en lugar de 100%`;
   }

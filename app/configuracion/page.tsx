@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Save, RotateCcw, Plus, Trash2, Upload, Settings, LogOut, Download, Share2 } from 'lucide-react';
-import { AppConfig, SegmentBenchmark } from '@/lib/types';
+import { AppConfig, SegmentBenchmark, ProductFamily } from '@/lib/types';
 import { loadConfig, saveConfig, saveConfigToSupabase, loadConfigFromSupabase } from '@/lib/store';
 import { DEFAULT_CONFIG } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
@@ -149,6 +149,36 @@ export default function ConfigPage() {
       ...prev,
       families: prev.families.map(f => f.id === id ? { ...f, margin } : f),
     }));
+  };
+
+  const updateFamilyName = (id: string, name: string) => {
+    setConfig(prev => ({
+      ...prev,
+      families: prev.families.map(f => f.id === id ? { ...f, name } : f),
+    }));
+  };
+
+  const updateFamilyType = (id: string, type: string) => {
+    setConfig(prev => ({
+      ...prev,
+      families: prev.families.map(f => f.id === id ? { ...f, type } : f),
+    }));
+  };
+
+  const deleteFamily = (id: string) => {
+    if (config.families.length <= 1) return; // mínimo 1 familia
+    setConfig(prev => ({ ...prev, families: prev.families.filter(f => f.id !== id) }));
+  };
+
+  const addFamily = () => {
+    const nums = config.families.map(f => {
+      const m = f.id.match(/^F(\d+)$/);
+      return m ? parseInt(m[1], 10) : 0;
+    });
+    const max = nums.length ? Math.max(...nums) : 0;
+    const newId = `F${max + 1}`;
+    const newFamily: ProductFamily = { id: newId, name: `Familia ${newId}`, type: 'Volumen', margin: 15 };
+    setConfig(prev => ({ ...prev, families: [...prev.families, newFamily] }));
   };
 
   const updateSegmentBenchmark = (segId: string, field: string, value: number | string) => {
@@ -328,35 +358,83 @@ export default function ConfigPage() {
         <div style={{ backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '16px' }}>
           <div style={{ padding: '24px 28px 20px', borderBottom: `1px solid ${D.border}` }}>
             <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 600, color: D.dark, margin: '0 0 4px 0' }}>
-              Márgenes por familia de producto
+              Familias de producto
             </h2>
             <p style={{ fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0 }}>
-              Margen de contribución (%) de cada familia. Se usa para calcular el margen actual de cada cliente.
+              Nombre, tipo y margen de contribución (%) de cada familia. Las columnas del CSV deben coincidir con los IDs.
             </p>
           </div>
-          <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+
+          {/* Column headers */}
+          <div style={{ padding: '10px 28px 4px', display: 'grid', gridTemplateColumns: '36px 1fr 110px 90px 28px', gap: '10px', alignItems: 'center' }}>
+            {['ID', 'Nombre', 'Tipo', 'Margen', ''].map((h, i) => (
+              <span key={i} style={{ fontSize: '10px', fontWeight: 500, color: D.muted, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
+            ))}
+          </div>
+
+          <div style={{ padding: '0 28px 20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {config.families.map(f => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: '13px', color: D.dark, fontFamily: 'Inter, sans-serif', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <span style={{ color: D.muted, fontWeight: 400, marginRight: '6px' }}>{f.id}</span>
-                    {f.name}
-                  </p>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>{f.type}</p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 90px 28px', gap: '10px', alignItems: 'center', padding: '8px 12px', backgroundColor: D.bg, borderRadius: '7px', border: `1px solid ${D.border}` }}>
+                {/* ID */}
+                <span style={{ fontSize: '12px', fontWeight: 600, color: D.muted, fontFamily: 'Inter, sans-serif' }}>{f.id}</span>
+
+                {/* Nombre */}
+                <input
+                  type="text"
+                  value={f.name}
+                  onChange={e => updateFamilyName(f.id, e.target.value)}
+                  style={{ border: `1px solid ${D.border}`, borderRadius: '5px', padding: '5px 8px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                  onFocus={e => (e.target.style.borderColor = D.dark)}
+                  onBlur={e  => (e.target.style.borderColor = D.border)}
+                />
+
+                {/* Tipo */}
+                <input
+                  type="text"
+                  value={f.type}
+                  onChange={e => updateFamilyType(f.id, e.target.value)}
+                  placeholder="Volumen"
+                  style={{ border: `1px solid ${D.border}`, borderRadius: '5px', padding: '5px 8px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                  onFocus={e => (e.target.style.borderColor = D.dark)}
+                  onBlur={e  => (e.target.style.borderColor = D.border)}
+                />
+
+                {/* Margen */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <input
                     type="number" min={0} max={100} step={0.5}
                     value={f.margin}
                     onChange={e => updateFamilyMargin(f.id, parseFloat(e.target.value) || 0)}
-                    style={numInputStyle}
+                    style={{ ...numInputStyle, width: '56px' }}
                     onFocus={e => (e.target.style.borderColor = D.dark)}
                     onBlur={e  => (e.target.style.borderColor = D.border)}
                   />
-                  <span style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>%</span>
+                  <span style={{ fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>%</span>
                 </div>
+
+                {/* Eliminar */}
+                <button
+                  onClick={() => deleteFamily(f.id)}
+                  disabled={config.families.length <= 1}
+                  style={{ color: D.muted, background: 'none', border: 'none', cursor: config.families.length > 1 ? 'pointer' : 'not-allowed', padding: '2px', display: 'flex', opacity: config.families.length <= 1 ? 0.3 : 1 }}
+                  onMouseEnter={e => { if (config.families.length > 1) (e.currentTarget as HTMLButtonElement).style.color = D.red; }}
+                  onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = D.muted)}
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
+
+            {/* Añadir familia */}
+            <button
+              onClick={addFamily}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '13px', fontWeight: 500, fontFamily: 'Inter, sans-serif', color: D.sec, background: 'none', border: `1px dashed ${D.border}`, borderRadius: '7px', padding: '10px 16px', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = D.dark; (e.currentTarget as HTMLButtonElement).style.color = D.dark; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = D.border; (e.currentTarget as HTMLButtonElement).style.color = D.sec; }}
+            >
+              <Plus size={14} />
+              Añadir familia
+            </button>
           </div>
         </div>
 

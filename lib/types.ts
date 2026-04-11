@@ -21,7 +21,7 @@ export interface ClientRow {
 export interface ProductFamily {
   id: string;
   name: string;
-  type: 'Volumen' | 'Técnico' | 'Sistema';
+  type: string; // editable, e.g. 'Volumen', 'Técnico', 'Sistema'
   margin: number; // percentage, e.g. 10 = 10%
 }
 
