@@ -8,7 +8,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
 import { ProcessedClient, AppConfig } from '@/lib/types';
-import { loadProcessedClients, loadCompany, loadConfig } from '@/lib/store';
+import { loadProcessedClients, loadCompany, loadConfig, saveProcessedClients } from '@/lib/store';
 import { loadSnapshots, loadSnapshotClientes, SnapshotMeta } from '@/lib/snapshots';
 import MetricCard from '@/components/MetricCard';
 import PriorityBadge from '@/components/PriorityBadge';
@@ -70,20 +70,34 @@ export default function DashboardOverview() {
   const [prevClients, setPrevClients] = useState<ProcessedClient[]>([]);
 
   useEffect(() => {
-    const loaded = loadProcessedClients();
-    if (loaded.length === 0) { router.push('/onboarding'); return; }
-    setClients(loaded);
-    setCompany(loadCompany());
-    setConfig(loadConfig());
-
-    // Cargar snapshots para la sección de evolución
-    loadSnapshots().then(snaps => {
-      setSnapshots(snaps);
-      if (snaps.length >= 2) {
-        // snaps[0] = más reciente → es el "anterior" vs datos actuales en memoria
-        loadSnapshotClientes(snaps[0].id).then(setPrevClients).catch(() => {});
+    async function init() {
+      let loaded = loadProcessedClients();
+      if (loaded.length === 0) {
+        // Fallback: cargar desde el snapshot más reciente de Supabase
+        try {
+          const snaps = await loadSnapshots();
+          if (!snaps.length) { router.push('/onboarding'); return; }
+          loaded = await loadSnapshotClientes(snaps[0].id);
+          if (!loaded.length) { router.push('/onboarding'); return; }
+          saveProcessedClients(loaded);
+        } catch {
+          router.push('/onboarding');
+          return;
+        }
       }
-    }).catch(() => {});
+      setClients(loaded);
+      setCompany(loadCompany());
+      setConfig(loadConfig());
+
+      // Cargar snapshots para la sección de evolución
+      loadSnapshots().then(snaps => {
+        setSnapshots(snaps);
+        if (snaps.length >= 2) {
+          loadSnapshotClientes(snaps[0].id).then(setPrevClients).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+    init();
   }, [router]);
 
   const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);

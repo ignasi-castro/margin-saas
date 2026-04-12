@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
-import { loadProcessedClients, loadConfig } from '@/lib/store';
+import { loadProcessedClients, loadConfig, saveProcessedClients } from '@/lib/store';
+import { loadSnapshots, loadSnapshotClientes } from '@/lib/snapshots';
 import MetricCard from '@/components/MetricCard';
 import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
@@ -38,10 +39,24 @@ export default function TablaPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
-    const loaded = loadProcessedClients();
-    if (loaded.length === 0) { router.push('/onboarding'); return; }
-    setClients(loaded);
-    setConfig(loadConfig());
+    async function init() {
+      let loaded = loadProcessedClients();
+      if (loaded.length === 0) {
+        try {
+          const snaps = await loadSnapshots();
+          if (!snaps.length) { router.push('/onboarding'); return; }
+          loaded = await loadSnapshotClientes(snaps[0].id);
+          if (!loaded.length) { router.push('/onboarding'); return; }
+          saveProcessedClients(loaded);
+        } catch {
+          router.push('/onboarding');
+          return;
+        }
+      }
+      setClients(loaded);
+      setConfig(loadConfig());
+    }
+    init();
   }, [router]);
 
   const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
@@ -201,9 +216,9 @@ export default function TablaPage() {
                       {c.gap > 0 ? `+${fmt(c.gap)}` : fmt(c.gap)}
                     </td>
                     <td style={{ padding: '14px 16px', color: D.sec, fontVariantNumeric: 'tabular-nums' }}
-                      title={c.benchmarkSource === 'dynamic'
-                        ? `Benchmark calculado a partir de los ${c.benchmarkTopCount} mejores clientes de este segmento (${fmt(c.benchmarkMargin)}%)`
-                        : 'Benchmark de configuración (pocos clientes en segmento)'}
+                      title={c.benchmarkClientName
+                        ? `Benchmark: ${c.benchmarkClientName} — margen de referencia de este segmento (${fmt(c.benchmarkMargin)}%)`
+                        : `Benchmark de segmento: ${fmt(c.benchmarkMargin)}%`}
                     >{fmt(c.potentialMargin6M)}%</td>
                     <td style={{ padding: '14px 16px', color: D.dark, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }} title={c.ventasReales ? 'Basado en ventas reales del CSV' : 'Estimado: volumen × 800€/t'}>{fmtEur(c.opportunityEuros)}</td>
                     <td style={{ padding: '14px 16px' }}><PriorityBadge priority={c.priority} color={c.priorityColor} /></td>

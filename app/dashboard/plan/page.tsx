@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { ProcessedClient, AppConfig } from '@/lib/types';
-import { loadProcessedClients, loadConfig } from '@/lib/store';
+import { loadProcessedClients, loadConfig, saveProcessedClients } from '@/lib/store';
+import { loadSnapshots, loadSnapshotClientes } from '@/lib/snapshots';
 import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
 import DashboardNav from '@/components/DashboardNav';
@@ -200,13 +201,27 @@ export default function PlanPage() {
   const [comFilter, setComFilter] = useState('');
 
   useEffect(() => {
-    const loaded = loadProcessedClients();
-    if (loaded.length === 0) { router.push('/onboarding'); return; }
-    const priority = loaded
-      .filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta')
-      .sort((a, b) => b.opportunityEuros - a.opportunityEuros);
-    setClients(priority);
-    setConfig(loadConfig());
+    async function init() {
+      let loaded = loadProcessedClients();
+      if (loaded.length === 0) {
+        try {
+          const snaps = await loadSnapshots();
+          if (!snaps.length) { router.push('/onboarding'); return; }
+          loaded = await loadSnapshotClientes(snaps[0].id);
+          if (!loaded.length) { router.push('/onboarding'); return; }
+          saveProcessedClients(loaded);
+        } catch {
+          router.push('/onboarding');
+          return;
+        }
+      }
+      const priority = loaded
+        .filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta')
+        .sort((a, b) => b.opportunityEuros - a.opportunityEuros);
+      setClients(priority);
+      setConfig(loadConfig());
+    }
+    init();
   }, [router]);
 
   const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);

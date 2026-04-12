@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import { Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { ClientRow } from '@/lib/types';
-import { validateRow } from '@/lib/calculations';
-import { saveRawClients, loadRawClients, loadLastUploadDate, loadConfig, loadProcessedClients } from '@/lib/store';
+import { validateRow, computeActualMargin, normalizeSegmentName } from '@/lib/calculations';
+import { saveRawClients, loadRawClients, loadLastUploadDate, loadConfig, saveConfig, loadProcessedClients, saveProcessedClients, saveConfigToSupabase } from '@/lib/store';
 import { SAMPLE_CSV } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
-import { saveSnapshot } from '@/lib/snapshots';
+import { saveSnapshot, loadSnapshots, loadSnapshotClientes } from '@/lib/snapshots';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC', green: '#2D7A4F', red: '#C94040' };
 
@@ -30,7 +30,7 @@ function defaultSnapshotName() {
   return `Análisis ${mes} ${now.getFullYear()}`;
 }
 
-interface ParsedResult { rows: ClientRow[]; errors: string[]; }
+interface ParsedResult { rows: ClientRow[]; errors: string[]; familyNames?: Record<string, string>; }
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -39,8 +39,9 @@ export default function OnboardingPage() {
   const [dragActive, setDragActive]     = useState(false);
   const [result, setResult]             = useState<ParsedResult | null>(null);
   const [fileName, setFileName]         = useState('');
-  const [existingCount, setExistingCount] = useState(0);
+  const [existingCount, setExistingCount]   = useState(0);
   const [lastUploadDate, setLastUploadDate] = useState('');
+  const [showBanner, setShowBanner]         = useState(false);
 
   // Modal de guardar snapshot
   const [showModal, setShowModal]       = useState(false);
@@ -48,60 +49,106 @@ export default function OnboardingPage() {
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState('');
 
-  useEffect(() => {
-    // Comprobar si ya hay datos cargados
-    const existing = loadRawClients();
-    if (existing.length > 0) {
-      setExistingCount(existing.length);
-      setLastUploadDate(loadLastUploadDate());
-    }
-    createClient().auth.getUser().then(({ data }) => {
-      const name = data.user?.user_metadata?.company_name as string | undefined;
-      if (name) { setGreeting(name); setCompany(name); }
-    });
-  }, []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFile = (file: File) => {
+  useEffect(() => {
+    async function init() {
+      // Comprobar datos en localStorage
+      const existing = loadRawClients();
+      if (existing.length > 0) {
+        setExistingCount(existing.length);
+        setLastUploadDate(loadLastUploadDate());
+        setShowBanner(true);
+      } else {
+        // Sin datos locales → comprobar Supabase
+        try {
+          const snaps = await loadSnapshots();
+          if (snaps.length > 0) {
+            // Cargar el snapshot más reciente y redirigir al dashboard
+            const snapClients = await loadSnapshotClientes(snaps[0].id);
+            if (snapClients.length > 0) {
+              saveProcessedClients(snapClients);
+              router.push('/dashboard');
+              return;
+            }
+          }
+        } catch {}
+      }
+      createClient().auth.getUser().then(({ data }) => {
+        const name = data.user?.user_metadata?.company_name as string | undefined;
+        if (name) { setGreeting(name); setCompany(name); }
+      });
+    }
+    init();
+  }, [router]);
+
+  const processFile = useCallback((file: File) => {
+    console.log('CSV: procesando archivo', file.name, file.size, 'bytes');
     setFileName(file.name);
+    setResult(null);
     const config = loadConfig();
     const familyIds = config.families.map(f => f.id);
     Papa.parse(file, {
       header: true, skipEmptyLines: true, dynamicTyping: true,
       complete: (parsed) => {
+        console.log('CSV parseado:', parsed.data.length, 'filas brutas');
         const rows: ClientRow[] = []; const errors: string[] = [];
+        // Extraer nombres de familias de columnas nombre_F1..F10 (primera fila con valor)
+        const familyNames: Record<string, string> = {};
+        for (let fi = 1; fi <= 10; fi++) {
+          const col = `nombre_F${fi}`;
+          for (const raw of parsed.data as Record<string, unknown>[]) {
+            const val = String(raw[col] ?? '').trim();
+            if (val) { familyNames[`F${fi}`] = val; break; }
+          }
+        }
+        if (Object.keys(familyNames).length > 0) {
+          console.log('CSV: nombres de familias detectados', familyNames);
+        }
         parsed.data.forEach((raw: unknown, i: number) => {
           const row = raw as Record<string, unknown>;
           const ventasRaw = row['ventas'];
           const clientRow: ClientRow = {
-            cliente: String(row['cliente'] ?? '').trim(), ciudad: String(row['ciudad'] ?? '').trim(),
-            segmento: String(row['segmento'] ?? '').trim(),
-            region: String(row['region'] ?? '').trim() || undefined,
+            cliente:   String(row['cliente']   ?? '').trim(),
+            ciudad:    String(row['ciudad']    ?? '').trim(),
+            segmento:  String(row['segmento']  ?? '').trim(),
+            region:    String(row['region']    ?? '').trim() || undefined,
             comercial: String(row['comercial'] ?? '').trim() || undefined,
-            F1: Number(row['F1'] ?? 0), F2: Number(row['F2'] ?? 0), F3: Number(row['F3'] ?? 0),
-            F4: Number(row['F4'] ?? 0), F5: Number(row['F5'] ?? 0), F6: Number(row['F6'] ?? 0),
-            F7: Number(row['F7'] ?? 0), F8: Number(row['F8'] ?? 0), F9: Number(row['F9'] ?? 0),
-            F10: Number(row['F10'] ?? 0), volumen: Number(row['volumen'] ?? 0),
+            F1:  Number(row['F1']  ?? 0), F2:  Number(row['F2']  ?? 0),
+            F3:  Number(row['F3']  ?? 0), F4:  Number(row['F4']  ?? 0),
+            F5:  Number(row['F5']  ?? 0), F6:  Number(row['F6']  ?? 0),
+            F7:  Number(row['F7']  ?? 0), F8:  Number(row['F8']  ?? 0),
+            F9:  Number(row['F9']  ?? 0), F10: Number(row['F10'] ?? 0),
+            volumen: Number(row['volumen'] ?? 0),
             ...(ventasRaw != null && ventasRaw !== '' ? { ventas: Number(ventasRaw) } : {}),
           };
           const error = validateRow(clientRow, i, familyIds);
           if (error) errors.push(error);
           rows.push(clientRow);
         });
-        setResult({ rows, errors });
+        console.log('CSV parseado:', rows.length, 'filas');
+        console.log('Errores:', errors.length > 0 ? errors : 'ninguno');
+        setResult({ rows, errors, familyNames: Object.keys(familyNames).length > 0 ? familyNames : undefined });
       },
-      error: (err) => setResult({ rows: [], errors: [`Error leyendo el archivo: ${err.message}`] }),
+      error: (err) => {
+        console.error('CSV error de parseo:', err.message);
+        setResult({ rows: [], errors: [`Error leyendo el archivo: ${err.message}`] });
+      },
     });
-  };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (file) processFile(file);
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    e.target.value = '';
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setDragActive(false);
+    e.preventDefault();
+    setDragActive(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) processFile(file);
-  }, []);
+    if (file) processFile(file);
+  }, [processFile]);
 
   const handleDownloadSample = () => {
     const blob = new Blob([SAMPLE_CSV], { type: 'text/csv;charset=utf-8;' });
@@ -113,7 +160,54 @@ export default function OnboardingPage() {
   // Al hacer clic en "Ver dashboard" guardamos los datos localmente y mostramos el modal
   const handleContinue = () => {
     if (!result || result.rows.length === 0 || result.errors.length > 0) return;
+
+    let config = loadConfig();
+
+    // PASO 2: auto-renombrar familias si el CSV incluye columnas nombre_F1..F10
+    if (result.familyNames && Object.keys(result.familyNames).length > 0) {
+      config = {
+        ...config,
+        families: config.families.map(f => {
+          const nombre = result.familyNames![f.id];
+          return nombre ? { ...f, name: nombre } : f;
+        }),
+      };
+    }
+
+    // PASO 1: auto-detectar segmentos y usar el cliente con mayor margen como benchmark
+    const margins = result.rows.map(row => ({
+      segmento: row.segmento,
+      normalizedSeg: normalizeSegmentName(row.segmento),
+      margin: computeActualMargin(row, config),
+    }));
+    const segBest = new Map<string, { margin: number; segmento: string }>();
+    for (const { normalizedSeg, segmento, margin } of margins) {
+      const current = segBest.get(normalizedSeg);
+      if (!current || margin > current.margin) {
+        segBest.set(normalizedSeg, { margin, segmento });
+      }
+    }
+    const updatedSegments = [...config.segments];
+    Array.from(segBest.entries()).forEach(([normalizedSeg, { margin, segmento }]) => {
+      const existing = updatedSegments.find(s => normalizeSegmentName(s.name) === normalizedSeg);
+      if (existing) {
+        existing.benchmarkMargin = Math.round(margin * 100) / 100;
+      } else {
+        updatedSegments.push({
+          id: normalizedSeg.replace(/\s+/g, '-'),
+          name: segmento,
+          F1: 0, F2: 0, F3: 0, F4: 0, F5: 0, F6: 0, F7: 0, F8: 0, F9: 0, F10: 0,
+          benchmarkMargin: Math.round(margin * 100) / 100,
+        });
+      }
+    });
+    config = { ...config, segments: updatedSegments };
+
+    saveConfig(config);
+    saveConfigToSupabase(config); // best-effort async
+    console.log('Guardando clientes...', result.rows.length, 'filas');
     saveRawClients(result.rows, company || 'Mi empresa');
+    console.log('Clientes guardados. Segmentos actualizados:', updatedSegments.map(s => `${s.name}: ${s.benchmarkMargin}%`));
     setSnapshotName(defaultSnapshotName());
     setSaveError('');
     setShowModal(true);
@@ -157,19 +251,31 @@ export default function OnboardingPage() {
         <div style={{ width: '100%', maxWidth: '600px' }}>
 
           {/* Banner datos existentes */}
-          {existingCount > 0 && (
-            <div style={{ backgroundColor: '#EAF3DE', border: '1px solid #2D7A4F', borderRadius: '8px', padding: '14px 18px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-              <p style={{ fontSize: '13px', color: '#1A3D28', fontFamily: 'Inter, sans-serif', margin: 0, lineHeight: 1.5 }}>
-                Tienes <strong>{existingCount} clientes</strong> cargados
-                {lastUploadDate ? ` del ${new Date(lastUploadDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.
-                {' '}Sube un nuevo CSV para actualizar.
+          {showBanner && (
+            <div style={{ backgroundColor: '#EAF3DE', border: '1px solid #2D7A4F', borderRadius: '10px', padding: '20px 24px', marginBottom: '24px' }}>
+              <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A3D28', fontFamily: 'Inter, sans-serif', margin: '0 0 4px 0' }}>
+                Tienes {existingCount} clientes cargados
               </p>
-              <a
-                href="/dashboard"
-                style={{ fontSize: '13px', fontWeight: 500, color: '#2D7A4F', fontFamily: 'Inter, sans-serif', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                Ver dashboard →
-              </a>
+              <p style={{ fontSize: '13px', color: '#2D7A4F', fontFamily: 'Inter, sans-serif', margin: '0 0 16px 0' }}>
+                {lastUploadDate
+                  ? `Última carga: ${new Date(lastUploadDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}.`
+                  : 'Datos disponibles en local.'}
+                {' '}¿Quieres ir directamente al dashboard?
+              </p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href="/dashboard"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#fff', backgroundColor: '#2D7A4F', fontFamily: 'Inter, sans-serif', textDecoration: 'none', borderRadius: '6px', padding: '9px 18px' }}
+                >
+                  Ver dashboard
+                </a>
+                <button
+                  onClick={() => setShowBanner(false)}
+                  style={{ fontSize: '13px', fontWeight: 400, color: '#2D7A4F', backgroundColor: 'transparent', fontFamily: 'Inter, sans-serif', border: '1px solid #2D7A4F', borderRadius: '6px', padding: '9px 18px', cursor: 'pointer' }}
+                >
+                  Subir nuevo CSV
+                </button>
+              </div>
             </div>
           )}
 
@@ -217,12 +323,21 @@ export default function OnboardingPage() {
               </button>
             </div>
 
+            {/* Input oculto — fuera del área clickable para evitar propagación */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+
             {/* Drop zone */}
             <div
               onDrop={handleDrop}
               onDragOver={e => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
-              onClick={() => document.getElementById('csv-input')?.click()}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 border: `1px dashed ${dragActive ? D.dark : D.border}`,
                 borderRadius: '10px', padding: '48px 24px',
@@ -240,7 +355,6 @@ export default function OnboardingPage() {
                 </p>
                 <p style={{ fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: 0 }}>Solo archivos .csv</p>
               </div>
-              <input id="csv-input" type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
             </div>
 
             {/* Column hint */}
@@ -252,7 +366,7 @@ export default function OnboardingPage() {
                 cliente, ciudad, segmento, F1–F10, volumen
               </p>
               <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '6px 0 0 0' }}>
-                F1–F10 deben sumar 100 por cliente. Volumen en toneladas. Columnas opcionales: region, comercial, ventas.
+                F1–F10 deben sumar 100 por cliente. Volumen en toneladas. Opcionales: region, comercial, ventas, nombre_F1…nombre_F10.
               </p>
             </div>
           </div>

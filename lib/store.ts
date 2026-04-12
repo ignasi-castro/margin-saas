@@ -5,10 +5,11 @@ import { DEFAULT_CONFIG } from './defaults';
 import { processClients } from './calculations';
 import { createClient } from './supabase';
 
-const STORAGE_KEY_CLIENTS = 'mixpower_clients_raw';
-const STORAGE_KEY_CONFIG = 'mixpower_config';
-const STORAGE_KEY_COMPANY = 'mixpower_company';
-const STORAGE_KEY_LAST_UPLOAD = 'mixpower_last_upload';
+const STORAGE_KEY_CLIENTS          = 'mixpower_clients_raw';
+const STORAGE_KEY_CONFIG           = 'mixpower_config';
+const STORAGE_KEY_COMPANY          = 'mixpower_company';
+const STORAGE_KEY_LAST_UPLOAD      = 'mixpower_last_upload';
+const STORAGE_KEY_CLIENTS_SNAPSHOT = 'mixpower_clients_snapshot'; // ProcessedClient[] restaurados desde Supabase
 
 export function saveConfig(config: AppConfig): void {
   if (typeof window === 'undefined') return;
@@ -121,15 +122,32 @@ export function loadCompany(): string {
   }
 }
 
+// Guarda ProcessedClient[] directamente (restaurados desde un snapshot de Supabase)
+export function saveProcessedClients(clients: ProcessedClient[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_CLIENTS_SNAPSHOT, JSON.stringify(clients));
+  } catch {}
+}
+
 export function loadProcessedClients(): ProcessedClient[] {
   try {
+    // Prioridad 1: datos crudos → procesar con config actual
     const rows = loadRawClients();
-    const config = loadConfig();
-    if (rows.length === 0) return [];
-    return processClients(rows, config);
-  } catch {
-    return [];
-  }
+    if (rows.length > 0) {
+      const config = loadConfig();
+      return processClients(rows, config);
+    }
+    // Prioridad 2: clientes procesados cacheados desde un snapshot de Supabase
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(STORAGE_KEY_CLIENTS_SNAPSHOT);
+      if (cached) {
+        const parsed = JSON.parse(cached) as ProcessedClient[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+  } catch {}
+  return [];
 }
 
 export function clearData(): void {
