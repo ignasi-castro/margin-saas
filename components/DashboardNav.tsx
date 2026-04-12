@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Upload, Download, Settings, LogOut } from 'lucide-react';
+import { Upload, Download, Settings, LogOut, BarChart2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { loadCompany } from '@/lib/store';
 import ExportPanel from './ExportPanel';
@@ -67,8 +67,11 @@ export default function DashboardNav() {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <Link href="/onboarding" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', textDecoration: 'none' }}>
-              <Upload size={13} /> Subir datos
+            <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', textDecoration: 'none' }}>
+              <BarChart2 size={13} /> Dashboard
+            </Link>
+            <Link href="/onboarding" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', textDecoration: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '5px 10px' }}>
+              <Upload size={13} /> Subir CSV
             </Link>
             <button
               onClick={() => setShowExport(v => !v)}

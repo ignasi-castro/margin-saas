@@ -48,6 +48,7 @@ export default function OnboardingPage() {
   const [snapshotName, setSnapshotName] = useState('');
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState('');
+  const [hasData, setHasData]           = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,6 +57,7 @@ export default function OnboardingPage() {
       // Comprobar datos en localStorage
       const existing = loadRawClients();
       if (existing.length > 0) {
+        setHasData(true);
         setExistingCount(existing.length);
         setLastUploadDate(loadLastUploadDate());
         setShowBanner(true);
@@ -67,6 +69,7 @@ export default function OnboardingPage() {
             // Cargar el snapshot más reciente y redirigir al dashboard
             const snapClients = await loadSnapshotClientes(snaps[0].id);
             if (snapClients.length > 0) {
+              setHasData(true);
               saveProcessedClients(snapClients);
               router.push('/dashboard');
               return;
@@ -244,7 +247,24 @@ export default function OnboardingPage() {
           <Logo />
           <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '16px', color: D.dark }}>MixPower</span>
         </Link>
-        <span style={{ fontSize: '13px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>Importar cartera</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {hasData && (
+            <Link
+              href="/dashboard"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', textDecoration: 'none', backgroundColor: D.dark, padding: '7px 14px', borderRadius: '6px' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <span style={{ color: '#fff' }}>Ver dashboard</span>
+            </Link>
+          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 14px', cursor: 'pointer' }}
+          >
+            <Upload size={13} />
+            Subir CSV
+          </button>
+        </div>
       </nav>
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
