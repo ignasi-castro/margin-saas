@@ -7,10 +7,10 @@ import Link from 'next/link';
 import { Upload, Download, CheckCircle, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { ClientRow } from '@/lib/types';
 import { validateRow, computeActualMargin, normalizeSegmentName } from '@/lib/calculations';
-import { saveRawClients, loadRawClients, loadLastUploadDate, loadConfig, saveConfig, loadProcessedClients, saveProcessedClients, saveConfigToSupabase } from '@/lib/store';
+import { saveRawClients, loadConfig, saveConfig, loadProcessedClients, saveConfigToSupabase } from '@/lib/store';
 import { SAMPLE_CSV } from '@/lib/defaults';
 import { createClient } from '@/lib/supabase';
-import { saveSnapshot, loadSnapshots, loadSnapshotClientes } from '@/lib/snapshots';
+import { saveSnapshot } from '@/lib/snapshots';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC', green: '#2D7A4F', red: '#C94040' };
 
@@ -39,51 +39,21 @@ export default function OnboardingPage() {
   const [dragActive, setDragActive]     = useState(false);
   const [result, setResult]             = useState<ParsedResult | null>(null);
   const [fileName, setFileName]         = useState('');
-  const [existingCount, setExistingCount]   = useState(0);
-  const [lastUploadDate, setLastUploadDate] = useState('');
-  const [showBanner, setShowBanner]         = useState(false);
 
   // Modal de guardar snapshot
   const [showModal, setShowModal]       = useState(false);
   const [snapshotName, setSnapshotName] = useState('');
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState('');
-  const [hasData, setHasData]           = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    async function init() {
-      // Comprobar datos en localStorage
-      const existing = loadRawClients();
-      if (existing.length > 0) {
-        setHasData(true);
-        setExistingCount(existing.length);
-        setLastUploadDate(loadLastUploadDate());
-        setShowBanner(true);
-      } else {
-        // Sin datos locales → comprobar Supabase
-        try {
-          const snaps = await loadSnapshots();
-          if (snaps.length > 0) {
-            // Cargar el snapshot más reciente y redirigir al dashboard
-            const snapClients = await loadSnapshotClientes(snaps[0].id);
-            if (snapClients.length > 0) {
-              setHasData(true);
-              saveProcessedClients(snapClients);
-              router.push('/dashboard');
-              return;
-            }
-          }
-        } catch {}
-      }
-      createClient().auth.getUser().then(({ data }) => {
-        const name = data.user?.user_metadata?.company_name as string | undefined;
-        if (name) { setGreeting(name); setCompany(name); }
-      });
-    }
-    init();
-  }, [router]);
+    createClient().auth.getUser().then(({ data }) => {
+      const name = data.user?.user_metadata?.company_name as string | undefined;
+      if (name) { setGreeting(name); setCompany(name); }
+    });
+  }, []);
 
   const processFile = useCallback((file: File) => {
     console.log('CSV: procesando archivo', file.name, file.size, 'bytes');
@@ -248,15 +218,6 @@ export default function OnboardingPage() {
           <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '16px', color: D.dark }}>MixPower</span>
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {hasData && (
-            <Link
-              href="/dashboard"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', textDecoration: 'none', backgroundColor: D.dark, padding: '7px 14px', borderRadius: '6px' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              <span style={{ color: '#fff' }}>Ver dashboard</span>
-            </Link>
-          )}
           <button
             onClick={() => fileInputRef.current?.click()}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: D.sec, fontFamily: 'Inter, sans-serif', background: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 14px', cursor: 'pointer' }}
@@ -269,35 +230,6 @@ export default function OnboardingPage() {
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
         <div style={{ width: '100%', maxWidth: '600px' }}>
-
-          {/* Banner datos existentes */}
-          {showBanner && (
-            <div style={{ backgroundColor: '#EAF3DE', border: '1px solid #2D7A4F', borderRadius: '10px', padding: '20px 24px', marginBottom: '24px' }}>
-              <p style={{ fontSize: '14px', fontWeight: 500, color: '#1A3D28', fontFamily: 'Inter, sans-serif', margin: '0 0 4px 0' }}>
-                Tienes {existingCount} clientes cargados
-              </p>
-              <p style={{ fontSize: '13px', color: '#2D7A4F', fontFamily: 'Inter, sans-serif', margin: '0 0 16px 0' }}>
-                {lastUploadDate
-                  ? `Última carga: ${new Date(lastUploadDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}.`
-                  : 'Datos disponibles en local.'}
-                {' '}¿Quieres ir directamente al dashboard?
-              </p>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <a
-                  href="/dashboard"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#fff', backgroundColor: '#2D7A4F', fontFamily: 'Inter, sans-serif', textDecoration: 'none', borderRadius: '6px', padding: '9px 18px' }}
-                >
-                  Ver dashboard
-                </a>
-                <button
-                  onClick={() => setShowBanner(false)}
-                  style={{ fontSize: '13px', fontWeight: 400, color: '#2D7A4F', backgroundColor: 'transparent', fontFamily: 'Inter, sans-serif', border: '1px solid #2D7A4F', borderRadius: '6px', padding: '9px 18px', cursor: 'pointer' }}
-                >
-                  Subir nuevo CSV
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Heading */}
           <div style={{ marginBottom: '32px' }}>

@@ -236,7 +236,16 @@ export default function TablaPage() {
       </main>
 
       {selected && config && (
-        <ClientDetailPanel client={selected} config={config} onClose={() => setSelected(null)} />
+        <ClientDetailPanel
+          client={selected}
+          config={config}
+          benchmarkMix={
+            selected.benchmarkClientName
+              ? clients.find(c => c.cliente === selected.benchmarkClientName)?.mix
+              : undefined
+          }
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );

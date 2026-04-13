@@ -39,24 +39,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Usuario autenticado en /onboarding → comprobar si ya tiene snapshots
-  if (user && pathname === '/onboarding') {
-    try {
-      const { data: snaps } = await supabase
-        .from('snapshots')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-      if (snaps && snaps.length > 0) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
-      }
-    } catch {
-      // Si falla la query, dejar pasar al onboarding
-    }
-  }
-
   // Usuario autenticado intentando acceder a /login → dashboard
   if (pathname === '/login' && user) {
     const url = request.nextUrl.clone();

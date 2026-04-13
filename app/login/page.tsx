@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-import { loadSnapshots } from '@/lib/snapshots';
 
 function Logo() {
   return (
@@ -33,13 +32,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    // Si el usuario ya tiene snapshots guardados → ir directo al dashboard
-    try {
-      const snaps = await loadSnapshots();
-      router.push(snaps.length > 0 ? '/dashboard' : '/onboarding');
-    } catch {
-      router.push('/dashboard');
-    }
+    router.push('/onboarding');
     router.refresh();
   };
 
