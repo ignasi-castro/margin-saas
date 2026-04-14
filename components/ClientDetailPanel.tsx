@@ -10,6 +10,7 @@ import { X, Download, Plus } from 'lucide-react';
 interface Props {
   client: ProcessedClient;
   config: AppConfig;
+  benchmarkClientMix?: number[];
   onClose: () => void;
 }
 
@@ -42,16 +43,23 @@ function planKey(cliente: string) {
   return `mixpower_plan_${cliente.replace(/\s+/g, '_')}`;
 }
 
-export default function ClientDetailPanel({ client, config, onClose }: Props) {
+export default function ClientDetailPanel({ client, config, benchmarkClientMix, onClose }: Props) {
   const segment = config.segments.find(s =>
     s.name.toLowerCase().trim() === client.segmento.toLowerCase().trim()
   ) ?? config.segments[0];
 
-  const familyRows = config.families.map(f => {
-    const actual    = client.mix[f.id] ?? 0;
-    const benchmark = segment[f.id as keyof typeof segment] as number;
-    return { ...f, actual, benchmark, gap: actual - benchmark };
+  const captureRate = config.captureRate ?? 0.40;
+
+  const familyRows = config.families.map((f, i) => {
+    const actual       = client.mix[f.id] ?? 0;
+    const benchmarkPct = benchmarkClientMix?.[i] ?? (segment[f.id as keyof typeof segment] as number ?? 0);
+    const gap          = actual - benchmarkPct; // negativo = por debajo del benchmark
+    const objetivo6M   = gap < 0 ? actual + Math.abs(gap) * captureRate : null;
+    const oportunidad  = gap < 0 ? client.ventas * (Math.abs(gap) / 100) * captureRate : null;
+    return { ...f, actual, benchmark: benchmarkPct, gap, objetivo6M, oportunidad };
   });
+
+  const totalOportunidad = familyRows.reduce((s, r) => s + (r.oportunidad ?? 0), 0);
 
   const top3 = [...familyRows].filter(f => f.gap < 0).sort((a, b) => a.gap - b.gap).slice(0, 3);
 
@@ -222,7 +230,7 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
 
       {/* Panel */}
       <div style={{
-        position: 'relative', width: '480px', maxWidth: '100vw',
+        position: 'relative', width: '700px', maxWidth: '100vw',
         backgroundColor: D.white, borderLeft: `1px solid ${D.border}`,
         display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto',
       }}>
@@ -282,41 +290,61 @@ export default function ClientDetailPanel({ client, config, onClose }: Props) {
               Mix por familia de producto
             </p>
             <div style={{ border: `1px solid ${D.border}`, borderRadius: '8px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: 'left' }}>Familia</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Actual</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Bench.</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Gap</th>
-                    <th style={{ ...th, width: '60px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {familyRows.map((row, i) => {
-                    const isUnder = row.gap < -2;
-                    const isAbove = row.gap > 0;
-                    const barPct  = Math.min(Math.abs(row.gap) * 5, 100);
-                    const gapColor = isUnder ? D.red : isAbove ? D.green : D.muted;
-                    return (
-                      <tr key={row.id} style={{ borderBottom: i < familyRows.length - 1 ? `1px solid ${D.border}` : 'none', backgroundColor: i % 2 === 0 ? D.white : D.bg }}>
-                        <td style={{ padding: '10px 14px', color: D.dark, fontFamily: 'Inter, sans-serif' }}>{row.name}</td>
-                        <td style={{ padding: '10px 14px', textAlign: 'right', color: D.sec, fontFamily: 'Inter, sans-serif' }}>{fmt(row.actual)}%</td>
-                        <td style={{ padding: '10px 14px', textAlign: 'right', color: D.muted, fontFamily: 'Inter, sans-serif' }}>{fmt(row.benchmark)}%</td>
-                        <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: gapColor, fontFamily: 'Inter, sans-serif' }}>
-                          {(row.gap >= 0 ? '+' : '') + fmt(row.gap)}
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <div style={{ height: '3px', backgroundColor: D.border, borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ height: '3px', width: `${barPct}%`, backgroundColor: gapColor, borderRadius: '2px' }} />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '560px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...th, textAlign: 'left' }}>Familia</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Actual %</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Benchmark %</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Gap pp</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Objetivo 6M</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Oportunidad €</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {familyRows.map((row, i) => {
+                      const isUnder = row.gap < 0;
+                      const rowBg = isUnder ? '#FEF2F2' : (i % 2 === 0 ? D.white : D.bg);
+                      return (
+                        <tr key={row.id} style={{ borderBottom: i < familyRows.length - 1 ? `1px solid ${D.border}` : 'none', backgroundColor: rowBg }}>
+                          <td style={{ padding: '9px 12px', color: D.dark, fontFamily: 'Inter, sans-serif' }}>{row.name}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: D.sec, fontFamily: 'Inter, sans-serif' }}>{fmt(row.actual)}%</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: D.muted, fontFamily: 'Inter, sans-serif' }}>{fmt(row.benchmark)}%</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'Inter, sans-serif' }}>
+                            {isUnder
+                              ? <span style={{ color: D.red, fontWeight: 600 }}>↑ {fmt(Math.abs(row.gap))} pp</span>
+                              : <span style={{ color: D.green, fontWeight: 600 }}>✓</span>
+                            }
+                          </td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: D.sec, fontFamily: 'Inter, sans-serif' }}>
+                            {row.objetivo6M !== null ? `${fmt(row.objetivo6M)}%` : '—'}
+                          </td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', fontFamily: 'Inter, sans-serif' }}>
+                            {row.oportunidad !== null
+                              ? <span style={{ color: D.green, fontWeight: 600 }}>{fmtEur(row.oportunidad)}</span>
+                              : <span style={{ color: D.muted }}>—</span>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {/* Total recuperable */}
+            {totalOportunidad > 0 && (
+              <div style={{ marginTop: '12px', padding: '16px 20px', backgroundColor: '#EAF3DE', border: '1px solid #2D7A4F', borderRadius: '8px' }}>
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 700, color: '#2D7A4F', margin: '0 0 4px 0' }}>
+                  Oportunidad total recuperable: {fmtEur(totalOportunidad)}
+                </p>
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#2D7A4F', margin: 0 }}>
+                  Concentrada en {familyRows.filter(r => r.gap < 0).length} familias por debajo del benchmark
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Recommendations */}

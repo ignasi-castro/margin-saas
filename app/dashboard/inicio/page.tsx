@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { AppConfig } from '@/lib/types';
-import { loadConfig } from '@/lib/store';
+import { ProcessedClient, AppConfig } from '@/lib/types';
+import { loadConfig, loadProcessedClients } from '@/lib/store';
 import DashboardNav from '@/components/DashboardNav';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC' };
@@ -48,10 +48,25 @@ const tdStyle: React.CSSProperties = {
 
 export default function InicioPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [clients, setClients] = useState<ProcessedClient[]>([]);
 
   useEffect(() => {
     setConfig(loadConfig());
+    setClients(loadProcessedClients());
   }, []);
+
+  // Benchmark dinámico por segmento: el cliente con mayor margen actual
+  const segmentBenchmarks = useMemo(() => {
+    if (!config || !clients.length) return [];
+    return config.segments.map(seg => {
+      const segClients = clients.filter(c =>
+        c.segmento.toLowerCase().trim() === seg.name.toLowerCase().trim()
+      );
+      if (!segClients.length) return { seg, client: null };
+      const best = segClients.reduce((a, b) => (a.actualMargin > b.actualMargin ? a : b));
+      return { seg, client: best };
+    });
+  }, [config, clients]);
 
   if (!config) return (
     <div style={{ minHeight: '100vh', backgroundColor: D.bg }}>
@@ -156,10 +171,60 @@ export default function InicioPage() {
             </div>
 
           </div>
-          <Link href="/configuracion"
-            style={{ display: 'inline-block', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, textDecoration: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '8px 16px', backgroundColor: D.white }}>
-            Editar configuración →
-          </Link>
+          {/* Tabla benchmarks dinámicos */}
+          {segmentBenchmarks.some(sb => sb.client !== null) && (
+            <div style={{ marginTop: '16px', backgroundColor: D.white, border: `1px solid ${D.border}`, borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: `1px solid ${D.border}` }}>
+                <p style={{ fontSize: '13px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+                  Clientes benchmark por segmento
+                </p>
+                <p style={{ fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: '4px 0 0 0' }}>
+                  El cliente con mayor margen actual de cada segmento — referencia dinámica calculada sobre los datos cargados
+                </p>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Segmento</th>
+                      <th style={thStyle}>Cliente benchmark</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Margen %</th>
+                      {config!.families.map(f => (
+                        <th key={f.id} style={{ ...thStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {f.name}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {segmentBenchmarks.map(({ seg, client: bm }, i) => (
+                      <tr key={seg.id} style={{ backgroundColor: i % 2 === 0 ? D.white : D.bg }}>
+                        <td style={tdStyle}>{seg.name}</td>
+                        <td style={{ ...tdStyle, color: bm ? D.dark : D.muted }}>
+                          {bm ? bm.cliente : '—'}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: 'right', fontFamily: '"Instrument Serif", Georgia, serif', color: '#2D7A4F', fontWeight: 600 }}>
+                          {bm ? `${bm.actualMargin.toFixed(1)}%` : '—'}
+                        </td>
+                        {config!.families.map(f => (
+                          <td key={f.id} style={{ ...tdStyle, textAlign: 'right', color: D.sec }}>
+                            {bm ? `${(bm.mix[f.id] ?? 0).toFixed(0)}%` : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: '16px' }}>
+            <Link href="/configuracion"
+              style={{ display: 'inline-block', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, textDecoration: 'none', border: `1px solid ${D.border}`, borderRadius: '6px', padding: '8px 16px', backgroundColor: D.white }}>
+              Editar configuración →
+            </Link>
+          </div>
         </div>
 
         {/* Section C — Factor de captura */}

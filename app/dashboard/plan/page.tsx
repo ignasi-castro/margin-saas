@@ -3,13 +3,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { ProcessedClient, AppConfig } from '@/lib/types';
+import { ProcessedClient, AppConfig, ProductFamily } from '@/lib/types';
 import { loadProcessedClients, loadConfig, saveProcessedClients } from '@/lib/store';
 import { loadSnapshots, loadSnapshotClientes } from '@/lib/snapshots';
 import PriorityBadge from '@/components/PriorityBadge';
 import MixPowerBar from '@/components/MixPowerBar';
 import DashboardNav from '@/components/DashboardNav';
-import FamilyRecommendations from '@/components/FamilyRecommendations';
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC' };
 
@@ -26,12 +25,15 @@ function planKey(cliente: string) {
   return `mixpower_plan_${cliente.replace(/\s+/g, '_')}`;
 }
 
-function loadPlan(cliente: string): ActionRow[] {
+function loadPlan(cliente: string): ActionRow[] | null {
   try {
     const stored = localStorage.getItem(planKey(cliente));
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const parsed: ActionRow[] = JSON.parse(stored);
+      if (parsed.some(r => r.accion.trim())) return parsed;
+    }
   } catch {}
-  return [{ ...EMPTY_ROW }, { ...EMPTY_ROW }, { ...EMPTY_ROW }];
+  return null;
 }
 
 function savePlan(cliente: string, rows: ActionRow[]) {
@@ -45,12 +47,72 @@ function fmtEur(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
-// Card de plan por cliente — componente propio para gestionar su estado independiente
-function ClientPlanCard({ client, config }: { client: ProcessedClient; config: AppConfig }) {
-  const [plan, setPlan] = useState<ActionRow[]>(() => loadPlan(client.cliente));
+function generateAutoPlan(
+  client: ProcessedClient,
+  config: AppConfig,
+  allClients: ProcessedClient[]
+): ActionRow[] {
+  const captureRate = config.captureRate ?? 0.40;
+  const benchmarkClient = allClients.find(c => c.cliente === client.benchmarkClientName);
+  const segment = config.segments.find(s =>
+    s.name.toLowerCase().trim() === client.segmento.toLowerCase().trim()
+  ) ?? config.segments[0];
+
+  const targetDate = new Date();
+  targetDate.setMonth(targetDate.getMonth() + 6);
+  const targetDateStr = targetDate.toISOString().split('T')[0];
+
+  interface FamilyScore {
+    family: ProductFamily;
+    score: number;
+    opp: number;
+    improvementPp: number;
+  }
+
+  const scores: FamilyScore[] = [];
+  for (const f of config.families) {
+    const actualPct = client.mix[f.id] ?? 0;
+    const benchmarkPct =
+      benchmarkClient?.mix[f.id] ??
+      ((segment?.[f.id as keyof typeof segment] as number | undefined) ?? 0);
+    const gapPp = actualPct - benchmarkPct; // negativo = por debajo del benchmark
+    if (gapPp >= 0) continue;
+    const absGap = Math.abs(gapPp);
+    const ventasFamilia = client.ventas * (actualPct / 100);
+    const score = absGap * ventasFamilia / 100;
+    const opp = ventasFamilia * absGap * captureRate / 100;
+    const improvementPp = absGap * captureRate;
+    scores.push({ family: f, score, opp, improvementPp });
+  }
+
+  scores.sort((a, b) => b.score - a.score);
+  const top3 = scores.slice(0, 3);
+
+  if (!top3.length) return [{ ...EMPTY_ROW }];
+
+  return top3.map(({ family, opp, improvementPp }) => ({
+    accion: `Mejorar ventas de ${family.name}`,
+    responsable: client.comercial || '',
+    objetivo: `${fmtEur(opp)} adicionales — ${improvementPp.toFixed(1)} pp de mejora en ${family.name}`,
+    fecha: targetDateStr,
+  }));
+}
+
+function ClientPlanCard({
+  client,
+  config,
+  allClients,
+}: {
+  client: ProcessedClient;
+  config: AppConfig;
+  allClients: ProcessedClient[];
+}) {
+  const [plan, setPlan] = useState<ActionRow[]>(() => {
+    return loadPlan(client.cliente) ?? generateAutoPlan(client, config, allClients);
+  });
 
   const updateRow = (idx: number, field: keyof ActionRow, value: string) => {
-    const updated = plan.map((r, i) => i === idx ? { ...r, [field]: value } : r);
+    const updated = plan.map((r, i) => (i === idx ? { ...r, [field]: value } : r));
     setPlan(updated);
     savePlan(client.cliente, updated);
   };
@@ -89,7 +151,6 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
           </div>
           <PriorityBadge priority={client.priority} color={client.priorityColor} />
         </div>
-        {/* Métricas rápidas */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: '10px', color: D.muted, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px 0' }}>Mix Power</p>
@@ -112,7 +173,6 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
 
       {/* Plan table */}
       <div style={{ padding: '20px 24px' }}>
-        <FamilyRecommendations client={client} config={config} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <p style={{ fontSize: '12px', fontWeight: 500, color: D.dark, fontFamily: 'Inter, sans-serif', margin: 0 }}>
             Plan de acción
@@ -127,10 +187,10 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
         <div style={{ border: `1px solid ${D.border}`, borderRadius: '8px', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'Inter, sans-serif', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '32%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '24%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '38%' }} />
+              <col style={{ width: '18%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -149,7 +209,7 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
                       placeholder="Acción..."
                       style={inputStyle}
                       onFocus={e => (e.target.style.borderColor = D.dark)}
-                      onBlur={e  => (e.target.style.borderColor = D.border)}
+                      onBlur={e => (e.target.style.borderColor = D.border)}
                     />
                   </td>
                   <td style={{ padding: '6px 8px' }}>
@@ -159,7 +219,7 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
                       placeholder="Nombre..."
                       style={inputStyle}
                       onFocus={e => (e.target.style.borderColor = D.dark)}
-                      onBlur={e  => (e.target.style.borderColor = D.border)}
+                      onBlur={e => (e.target.style.borderColor = D.border)}
                     />
                   </td>
                   <td style={{ padding: '6px 8px' }}>
@@ -169,7 +229,7 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
                       placeholder="Ej: +5pp"
                       style={inputStyle}
                       onFocus={e => (e.target.style.borderColor = D.dark)}
-                      onBlur={e  => (e.target.style.borderColor = D.border)}
+                      onBlur={e => (e.target.style.borderColor = D.border)}
                     />
                   </td>
                   <td style={{ padding: '6px 8px' }}>
@@ -179,7 +239,7 @@ function ClientPlanCard({ client, config }: { client: ProcessedClient; config: A
                       onChange={e => updateRow(i, 'fecha', e.target.value)}
                       style={inputStyle}
                       onFocus={e => (e.target.style.borderColor = D.dark)}
-                      onBlur={e  => (e.target.style.borderColor = D.border)}
+                      onBlur={e => (e.target.style.borderColor = D.border)}
                     />
                   </td>
                 </tr>
@@ -215,52 +275,53 @@ export default function PlanPage() {
           return;
         }
       }
-      const priority = loaded
-        .filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta')
-        .sort((a, b) => b.opportunityEuros - a.opportunityEuros);
-      setClients(priority);
+      setClients(loaded);
       setConfig(loadConfig());
     }
     init();
   }, [router]);
 
+  // Grupos por comercial: top 3 clientes por oportunidad
+  const comercialGroups = useMemo(() => {
+    if (!clients.length) return [];
+    const map = new Map<string, ProcessedClient[]>();
+    for (const c of clients) {
+      const com = c.comercial || '(sin comercial)';
+      if (!map.has(com)) map.set(com, []);
+      map.get(com)!.push(c);
+    }
+    const groups = Array.from(map.entries()).map(([comercial, cls]) => ({
+      comercial,
+      clients: [...cls].sort((a, b) => b.opportunityEuros - a.opportunityEuros).slice(0, 3),
+      totalOpp: cls.reduce((s, c) => s + c.opportunityEuros, 0),
+    }));
+    return groups.sort((a, b) => b.totalOpp - a.totalOpp);
+  }, [clients]);
+
   const segments    = useMemo(() => Array.from(new Set(clients.map(c => c.segmento))).filter(Boolean), [clients]);
   const regions     = useMemo(() => Array.from(new Set(clients.map(c => c.region))).filter(Boolean).sort(), [clients]);
-  const comerciales = useMemo(() => Array.from(new Set(clients.map(c => c.comercial))).filter(Boolean).sort(), [clients]);
+  const comerciales = useMemo(() => comercialGroups.map(g => g.comercial), [comercialGroups]);
 
-  // Comerciales filtrados según la región seleccionada
-  const comercialesFiltrados = useMemo(() => {
-    if (!regFilter) return comerciales;
-    return Array.from(new Set(
-      clients
-        .filter(c => c.region === regFilter)
-        .map(c => c.comercial)
-    )).filter(Boolean).sort() as string[];
-  }, [clients, regFilter, comerciales]);
-
-  // Si el comercial seleccionado no existe en la nueva región, resetearlo
-  useEffect(() => {
-    if (comFilter && !comercialesFiltrados.includes(comFilter)) {
-      setComFilter('');
-    }
-  }, [comercialesFiltrados, comFilter]);
-
-  const filtered = useMemo(() => {
-    let list = [...clients];
-    if (segFilter) list = list.filter(c => c.segmento  === segFilter);
-    if (regFilter) list = list.filter(c => c.region    === regFilter);
-    if (comFilter) list = list.filter(c => c.comercial === comFilter);
-    return list;
-  }, [clients, segFilter, regFilter, comFilter]);
+  const filteredGroups = useMemo(() => {
+    if (!segFilter && !regFilter && !comFilter) return comercialGroups;
+    return comercialGroups
+      .filter(g => !comFilter || g.comercial === comFilter)
+      .map(g => ({
+        ...g,
+        clients: g.clients.filter(c =>
+          (!segFilter || c.segmento === segFilter) &&
+          (!regFilter || c.region === regFilter)
+        ),
+      }))
+      .filter(g => g.clients.length > 0);
+  }, [comercialGroups, segFilter, regFilter, comFilter]);
 
   if (clients.length === 0 || !config) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: D.bg, display: 'flex', flexDirection: 'column' }}>
         <DashboardNav />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p style={{ color: D.muted, fontFamily: 'Inter, sans-serif', fontSize: '14px' }}>
-            No hay clientes con prioridad Muy Alta o Alta.
-          </p>
+          <p style={{ color: D.muted, fontFamily: 'Inter, sans-serif', fontSize: '14px' }}>Cargando...</p>
         </div>
       </div>
     );
@@ -275,10 +336,10 @@ export default function PlanPage() {
         {/* Title */}
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '32px', fontWeight: 400, color: D.dark, margin: '0 0 4px 0', lineHeight: 1.1 }}>
-            Plan de acción
+            Plan de acción por comercial
           </h1>
           <p style={{ fontSize: '14px', color: D.sec, fontFamily: 'Inter, sans-serif', margin: 0 }}>
-            {clients.length} clientes con prioridad Muy Alta o Alta · ordenados por oportunidad
+            Top 3 clientes por oportunidad para cada comercial · generado automáticamente
           </p>
         </div>
 
@@ -287,7 +348,7 @@ export default function PlanPage() {
           {[
             { value: segFilter, setter: setSegFilter, options: segments,    placeholder: 'Todos los segmentos' },
             { value: regFilter, setter: setRegFilter, options: regions,     placeholder: 'Todas las regiones' },
-            { value: comFilter, setter: setComFilter, options: comercialesFiltrados, placeholder: 'Todos los comerciales' },
+            { value: comFilter, setter: setComFilter, options: comerciales, placeholder: 'Todos los comerciales' },
           ].map((f, i) => (
             <select key={i} value={f.value} onChange={e => f.setter(e.target.value)}
               style={{ border: `1px solid ${D.border}`, borderRadius: '6px', padding: '7px 12px', fontSize: '13px', fontFamily: 'Inter, sans-serif', color: D.dark, backgroundColor: D.white, outline: 'none', cursor: 'pointer' }}>
@@ -301,16 +362,46 @@ export default function PlanPage() {
               Limpiar
             </button>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif' }}>
-            {filtered.length} clientes
-          </span>
         </div>
 
-        {/* Cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {filtered.map(c => (
-            <ClientPlanCard key={c.cliente} client={c} config={config} />
+        {/* Grupos por comercial */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          {filteredGroups.map(group => (
+            <div key={group.comercial}>
+              {/* Cabecera de comercial */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '10px', borderBottom: `2px solid ${D.dark}` }}>
+                <div>
+                  <h2 style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '22px', fontWeight: 400, color: D.dark, margin: '0 0 2px 0' }}>
+                    {group.comercial}
+                  </h2>
+                  <p style={{ fontSize: '12px', color: D.muted, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+                    Top 3 clientes · {group.clients.length} en este plan
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: '11px', color: D.muted, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>
+                    Oportunidad total cartera
+                  </p>
+                  <p style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontSize: '22px', color: '#2D7A4F', margin: 0 }}>
+                    {fmtEur(group.totalOpp)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tarjetas de clientes */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {group.clients.map(c => (
+                  <ClientPlanCard key={c.cliente} client={c} config={config} allClients={clients} />
+                ))}
+              </div>
+            </div>
           ))}
+
+          {filteredGroups.length === 0 && (
+            <div style={{ padding: '64px', textAlign: 'center', color: D.muted, fontSize: '14px', fontFamily: 'Inter, sans-serif' }}>
+              No hay clientes que coincidan con los filtros
+            </div>
+          )}
         </div>
 
       </main>

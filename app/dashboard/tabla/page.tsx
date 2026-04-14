@@ -239,11 +239,12 @@ export default function TablaPage() {
         <ClientDetailPanel
           client={selected}
           config={config}
-          benchmarkMix={
-            selected.benchmarkClientName
-              ? clients.find(c => c.cliente === selected.benchmarkClientName)?.mix
-              : undefined
-          }
+          benchmarkClientMix={(() => {
+            if (!selected.benchmarkClientName) return undefined;
+            const bm = clients.find(c => c.cliente === selected.benchmarkClientName);
+            if (!bm) return undefined;
+            return config.families.map(f => bm.mix[f.id] ?? 0);
+          })()}
           onClose={() => setSelected(null)}
         />
       )}
