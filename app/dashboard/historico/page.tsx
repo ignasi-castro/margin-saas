@@ -4,7 +4,33 @@ import { useState, useEffect, useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
 import { ProcessedClient } from '@/lib/types';
 import { loadSnapshots, loadSnapshotClientes, deleteSnapshot, SnapshotMeta } from '@/lib/snapshots';
+import { loadConfig } from '@/lib/store';
 import DashboardNav from '@/components/DashboardNav';
+
+// Recalcula opportunityEuros y mixPower del snapshot actual
+// usando el benchmark fijo del snapshot base (por segmento).
+// Así si el margen sube vs el base, la oportunidad baja proporcionalmente.
+function normalizeToBaseBenchmark(
+  data: ProcessedClient[],
+  baseData: ProcessedClient[],
+  captureRate: number
+): ProcessedClient[] {
+  if (!data.length || !baseData.length) return data;
+  const benchmarkBySegment = new Map<string, number>();
+  for (const c of baseData) {
+    const cur = benchmarkBySegment.get(c.segmento);
+    if (cur === undefined || c.actualMargin > cur) {
+      benchmarkBySegment.set(c.segmento, c.actualMargin);
+    }
+  }
+  return data.map(c => {
+    const benchmark = benchmarkBySegment.get(c.segmento) ?? c.benchmarkMargin;
+    const gap       = Math.max(0, benchmark - c.actualMargin);
+    const opp       = c.ventas * gap * captureRate / 100;
+    const mixPower  = benchmark > 0 ? c.actualMargin / benchmark : 0;
+    return { ...c, opportunityEuros: opp, benchmarkMargin: benchmark, mixPower };
+  });
+}
 
 const D = { bg: '#F7F6F2', white: '#FFFFFF', dark: '#1A1A18', sec: '#6B6B67', muted: '#9B9B97', border: '#E2E2DC', green: '#2D7A4F', red: '#C94040' };
 
@@ -84,6 +110,7 @@ export default function HistoricoPage() {
   const [compareData,setCompareData]= useState<ProcessedClient[]>([]);
   const [comparing,  setComparing]  = useState(false);
   const [deleting,   setDeleting]   = useState<string | null>(null);
+  const captureRate = loadConfig().captureRate ?? 0.40;
 
   useEffect(() => {
     loadSnapshots().then(s => { setSnapshots(s); setLoading(false); });
@@ -115,49 +142,54 @@ export default function HistoricoPage() {
     }
   };
 
+  // --- Snapshot actual normalizado con benchmark fijo del snapshot base ---
+  const compareDataNormalized = useMemo(
+    () => normalizeToBaseBenchmark(compareData, baseData, captureRate),
+    [compareData, baseData, captureRate]
+  );
+
   // --- Métricas agregadas ---
   const baseMetrics = useMemo(() => {
     if (!baseData.length) return null;
     return {
-      avgMargin:    baseData.reduce((s, c) => s + c.actualMargin, 0) / baseData.length,
-      totalOpp:     baseData.reduce((s, c) => s + c.opportunityEuros, 0),
-      avgMixPower:  baseData.reduce((s, c) => s + c.mixPower, 0) / baseData.length,
-      urgentCount:  baseData.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length,
+      avgMargin:   baseData.reduce((s, c) => s + c.actualMargin, 0) / baseData.length,
+      totalOpp:    baseData.reduce((s, c) => s + c.opportunityEuros, 0),
+      avgMixPower: baseData.reduce((s, c) => s + c.mixPower, 0) / baseData.length,
+      urgentCount: baseData.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length,
     };
   }, [baseData]);
 
   const compareMetrics = useMemo(() => {
-    if (!compareData.length) return null;
+    if (!compareDataNormalized.length) return null;
     return {
-      avgMargin:    compareData.reduce((s, c) => s + c.actualMargin, 0) / compareData.length,
-      totalOpp:     compareData.reduce((s, c) => s + c.opportunityEuros, 0),
-      avgMixPower:  compareData.reduce((s, c) => s + c.mixPower, 0) / compareData.length,
-      urgentCount:  compareData.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length,
+      avgMargin:   compareDataNormalized.reduce((s, c) => s + c.actualMargin, 0) / compareDataNormalized.length,
+      totalOpp:    compareDataNormalized.reduce((s, c) => s + c.opportunityEuros, 0),
+      avgMixPower: compareDataNormalized.reduce((s, c) => s + c.mixPower, 0) / compareDataNormalized.length,
+      urgentCount: compareDataNormalized.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length,
     };
-  }, [compareData]);
+  }, [compareDataNormalized]);
 
   // --- Tabla de evolución por cliente ---
   const evolutionRows = useMemo((): ClientRow[] => {
-    if (!baseData.length && !compareData.length) return [];
+    if (!baseData.length && !compareDataNormalized.length) return [];
     const allNames = Array.from(new Set([
       ...baseData.map(c => c.cliente),
-      ...compareData.map(c => c.cliente),
+      ...compareDataNormalized.map(c => c.cliente),
     ]));
     const baseMap    = new Map(baseData.map(c => [c.cliente, c]));
-    const compareMap = new Map(compareData.map(c => [c.cliente, c]));
+    const compareMap = new Map(compareDataNormalized.map(c => [c.cliente, c]));
     return allNames.map(name => ({
       cliente: name,
       base:    baseMap.get(name)    ?? null,
       compare: compareMap.get(name) ?? null,
     })).sort((a, b) => {
-      // Ordenar por mayor oportunidad (del período de comparación o base)
       const oppA = (a.compare ?? a.base)?.opportunityEuros ?? 0;
       const oppB = (b.compare ?? b.base)?.opportunityEuros ?? 0;
       return oppB - oppA;
     });
-  }, [baseData, compareData]);
+  }, [baseData, compareDataNormalized]);
 
-  const hasComparison = baseData.length > 0 && compareData.length > 0;
+  const hasComparison = baseData.length > 0 && compareDataNormalized.length > 0;
   const baseMeta    = snapshots.find(s => s.id === baseId);
   const compareMeta = snapshots.find(s => s.id === compareId);
 

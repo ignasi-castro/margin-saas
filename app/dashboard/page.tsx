@@ -227,17 +227,39 @@ export default function DashboardOverview() {
 
         {/* Evolución vs snapshot anterior */}
         {snapshots.length >= 2 && prevClients.length > 0 && (() => {
-          const prevAvgMargin      = prevClients.reduce((s, c) => s + c.actualMargin, 0) / prevClients.length;
-          const prevTotalOpp       = prevClients.reduce((s, c) => s + c.opportunityEuros, 0);
-          const prevAvgMixPower    = prevClients.reduce((s, c) => s + c.mixPower, 0) / prevClients.length;
-          const prevUrgent         = prevClients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
-          const snapshotName       = snapshots[0].nombre;
+          const prevAvgMargin   = prevClients.reduce((s, c) => s + c.actualMargin, 0) / prevClients.length;
+          const prevTotalOpp    = prevClients.reduce((s, c) => s + c.opportunityEuros, 0);
+          const prevAvgMixPower = prevClients.reduce((s, c) => s + c.mixPower, 0) / prevClients.length;
+          const prevUrgent      = prevClients.filter(c => c.priority === 'Muy Alta' || c.priority === 'Alta').length;
+          const snapshotName    = snapshots[0].nombre;
+
+          // Benchmark fijo por segmento del snapshot base (prevClients = más antiguo)
+          const captureRate = config?.captureRate ?? 0.40;
+          const baseBenchmarkBySegment = new Map<string, number>();
+          for (const c of prevClients) {
+            const cur = baseBenchmarkBySegment.get(c.segmento);
+            if (cur === undefined || c.actualMargin > cur) {
+              baseBenchmarkBySegment.set(c.segmento, c.actualMargin);
+            }
+          }
+          // Oportunidad actual recalculada con benchmark fijo del snapshot base
+          const totalOppFixed = filtered.reduce((s, c) => {
+            const bm = baseBenchmarkBySegment.get(c.segmento) ?? c.benchmarkMargin;
+            return s + c.ventas * Math.max(0, bm - c.actualMargin) * captureRate / 100;
+          }, 0);
+          // Mix Power actual recalculado con benchmark fijo del snapshot base
+          const avgMixPowerFixed = filtered.length
+            ? filtered.reduce((s, c) => {
+                const bm = baseBenchmarkBySegment.get(c.segmento) ?? c.benchmarkMargin;
+                return s + (bm > 0 ? c.actualMargin / bm : 0);
+              }, 0) / filtered.length
+            : 0;
 
           const evo = [
-            { label: 'Margen medio',        prev: `${fmt(prevAvgMargin)}%`,     curr: `${fmt(avgMargin)}%`,         delta: avgMargin - prevAvgMargin,           betterHigh: true  },
-            { label: 'Oportunidad total',   prev: fmtEur(prevTotalOpp),         curr: fmtEur(totalOpportunity),     delta: totalOpportunity - prevTotalOpp,     betterHigh: false },
-            { label: 'Mix Power medio',     prev: fmt(prevAvgMixPower, 2),      curr: fmt(avgMixPower, 2),          delta: avgMixPower - prevAvgMixPower,       betterHigh: true  },
-            { label: 'Clientes prioritarios', prev: String(prevUrgent),         curr: String(urgentCount),          delta: urgentCount - prevUrgent,            betterHigh: false },
+            { label: 'Margen medio',          prev: `${fmt(prevAvgMargin)}%`,  curr: `${fmt(avgMargin)}%`,           delta: avgMargin - prevAvgMargin,        betterHigh: true  },
+            { label: 'Oportunidad total',      prev: fmtEur(prevTotalOpp),      curr: fmtEur(totalOppFixed),          delta: totalOppFixed - prevTotalOpp,     betterHigh: false },
+            { label: 'Mix Power medio',        prev: fmt(prevAvgMixPower, 2),   curr: fmt(avgMixPowerFixed, 2),       delta: avgMixPowerFixed - prevAvgMixPower, betterHigh: true },
+            { label: 'Clientes prioritarios',  prev: String(prevUrgent),        curr: String(urgentCount),            delta: urgentCount - prevUrgent,          betterHigh: false },
           ];
 
           return (
